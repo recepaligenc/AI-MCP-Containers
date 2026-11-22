@@ -125,6 +125,7 @@ test('tools/call happy path forwards prompt and returns the answer', async () =>
   const r = got.get(3).result;
   assert.equal(r.isError, undefined);
   assert.equal(r.content[0].text, 'echo: hello');
+  assert.equal(r.structuredContent.answer, 'echo: hello');
   const receipt = r.structuredContent.receipt;
   assert.match(receipt.invocationId, /^[0-9a-f-]{36}$/);
   assert.equal(receipt.provider, 'codex');
@@ -688,6 +689,30 @@ test('tools/call preserves native usage and emits distinct deduplicatable invoca
   assert.equal(receipt.usage.scope, 'per_call');
   assert.notEqual(receipt.invocationId, second.structuredContent.receipt.invocationId);
   assert.deepEqual(JSON.parse(first.content[1].text.replace('AI-MCP usage receipt: ', '')), receipt);
+});
+
+test('structured output carries the answer or the error, so a host that surfaces only structuredContent still delivers it', async () => {
+  const receiptOf = (r) => JSON.parse(r.content[1].text.replace('AI-MCP usage receipt: ', ''));
+
+  const ok = await drive([{ jsonrpc: '2.0', id: 201, method: 'tools/call',
+    params: { name: 'ask_codex', arguments: { prompt: 'payload' } } }]);
+  const okResult = ok.get(201).result;
+  assert.equal(okResult.isError, undefined);
+  assert.equal(okResult.content[0].text, 'echo: payload');
+  assert.equal(okResult.structuredContent.answer, okResult.content[0].text);
+  assert.deepEqual(Object.keys(okResult.structuredContent).sort(), ['answer', 'receipt']);
+  assert.deepEqual(okResult.structuredContent.receipt, receiptOf(okResult));
+
+  const failed = await drive(
+    [{ jsonrpc: '2.0', id: 202, method: 'tools/call', params: { name: 'ask_codex', arguments: { prompt: 'payload' } } }],
+    { token: 'wrong-token' },
+  );
+  const failedResult = failed.get(202).result;
+  assert.equal(failedResult.isError, true);
+  assert.match(failedResult.content[0].text, /unauthorized/i);
+  assert.equal(failedResult.structuredContent.error, failedResult.content[0].text);
+  assert.deepEqual(Object.keys(failedResult.structuredContent).sort(), ['error', 'receipt']);
+  assert.deepEqual(failedResult.structuredContent.receipt, receiptOf(failedResult));
 });
 
 // Use a separate upstream so a response can deliberately stall after its headers.

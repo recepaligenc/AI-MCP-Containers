@@ -26,7 +26,7 @@ import { dirname, resolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER_NAME = 'ai-mcp-containers';
-const SERVER_VERSION = '1.1.0';
+const SERVER_VERSION = '1.1.1';
 const MAX_PROMPT = 100_000; // mirror ChatRequestValidator.MaxPromptLength in the bridge
 const SUPPORTED_PROTOCOL = '2025-06-18';
 
@@ -304,13 +304,13 @@ async function handle(msg) {
         log('info', 'chat ok', { provider: CFG.provider, model: data.model, ms });
         const usageReceipt = receipt(data.usage);
         reply(id, { content: [{ type: 'text', text: data.answer }, receiptContent(usageReceipt)],
-          structuredContent: { receipt: usageReceipt } });
+          structuredContent: { answer: data.answer, receipt: usageReceipt } });
       } catch (e) {
         log('warn', 'chat failed', { provider: CFG.provider, error: e.message });
         // Tool-level error → isError content so the model sees it (not a protocol error).
         const usageReceipt = receipt(null);
         reply(id, { isError: true, content: [{ type: 'text', text: e.message }, receiptContent(usageReceipt)],
-          structuredContent: { receipt: usageReceipt } });
+          structuredContent: { error: e.message, receipt: usageReceipt } });
       } finally {
         requestControllers.delete(id);
         inFlight--;

@@ -28,9 +28,11 @@ time and necessary rework rather than treating agreement as proof of correctness
 
 ## What the initiating client receives
 
-Each dispatched MCP provider call returns an invocation receipt alongside the
-answer. Clients that support structured tool output receive `structuredContent.receipt`;
-other clients can read the same receipt in the second text block. Both representations
+Each dispatched MCP provider call returns the answer and an invocation receipt. The
+answer is the first text block and the receipt is the second. The structured output
+carries the same two things: `structuredContent.answer` (or `structuredContent.error`
+for a failed call) and `structuredContent.receipt`. This is because some clients give
+their model only the structured output when it is present. Both receipt representations
 have the **same invocation ID** and must be counted once.
 
 | Receipt field | Meaning |
