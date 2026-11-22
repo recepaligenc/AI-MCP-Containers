@@ -36,9 +36,11 @@ such as `/mnt/projects` exposes more projects than a single selected repository.
 The fixed safety prompt is behavioral guidance, not a filesystem access barrier.
 Keep secrets outside the selected tree when they must not be readable.
 
-Leave private `.env` and generated Compose overrides out of Git. Keep the default
-localhost binding unless you need the documented host-IP mode. Host-IP access still
-requires the bearer token; review the README network limitations before enabling it.
+Leave private `.env` and generated Compose overrides out of Git. The example leaves
+`AI_MCP_LAN_IP` empty, so the services answer on this host and on the `ai-mcp-shared`
+Docker network only. Keep it empty unless you need the documented host-IP mode.
+Host-IP access still requires the bearer token; review the README network limitations
+before enabling it.
 
 ## 3. Start the services
 

@@ -38,7 +38,7 @@ Copy `.env.example` to the ignored private `.env` and fill in these settings:
 | `AI_MCP_CODEX_EXT_BIN` | Dedicated stable Codex binary directory, normally `${HOME}/.codex-ext-bin`. |
 | `AI_MCP_CLAUDE_EXTENSIONS` | Host VS Code extensions directory, normally `${HOME}/.vscode/extensions`. |
 | `AI_MCP_MAX_CONCURRENT_REQUESTS` | Maximum active requests per provider; default `6`. |
-| `AI_MCP_LAN_IP` | `auto` discovers the host's physical private IPv4 addresses at startup. Set one host IPv4 to restrict access, or leave empty to disable LAN access. |
+| `AI_MCP_LAN_IP` | Empty, as in the example, keeps access to this host and the Docker network only. `auto` discovers the host's physical private IPv4 addresses at startup; one assigned private host IPv4 adds a listener on that address only. |
 
 Create the shared network once, prepare Codex's stable binary copy, then start:
 
@@ -67,8 +67,10 @@ configuration. LAN access supplements localhost access; existing local MCP clien
 keep working. The preflight rejects wildcard/public bindings, Docker bridge addresses,
 addresses not assigned to this host, and mappings that remove localhost access.
 
-The example enables `AI_MCP_LAN_IP=auto`. On a Linux host using a local Docker Unix
-socket, startup discovers RFC1918 IPv4 addresses on active physical network interfaces,
+The example leaves `AI_MCP_LAN_IP` empty: the services are reachable from this host
+and from containers on `ai-mcp-shared` only. Set `AI_MCP_LAN_IP=auto` to add LAN
+access. On a Linux host using a local Docker Unix socket, startup then discovers
+RFC1918 IPv4 addresses on active physical network interfaces,
 including Ethernet and Wi-Fi. Docker bridges, VPN/tunnel and other virtual interfaces
 are excluded. Each discovered address receives its own port mappings; no wildcard
 listener is added. TCP/SSH Docker endpoints and Docker Desktop are rejected in automatic
