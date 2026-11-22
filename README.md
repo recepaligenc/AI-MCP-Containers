@@ -1,11 +1,19 @@
 # AI-MCP-Containers
 
-![Claude and Codex exchange plans, code proposals and test analysis through an MCP client](docs/assets/pair-workflow.gif)
+![Human-figure agents discuss the goal, critically revise a plan, compare UI options with user approval, propose changes, reuse checks, and shake hands over a joint delivery. Intended benefits: less unnecessary change, earlier risk discovery, consistent UI and less repeated testing.](docs/assets/pair-workflow.gif)
 
-**Example collaborative workflow:** Your MCP client sends one agent's proposal to the
-other for review and brings the results back. Providers analyze the read-only project;
-the client applies approved edits and runs tests. Automatic orchestration is not built in.
-[View the static overview](docs/assets/pair-workflow.png).
+[View the static result and six-step overview](docs/assets/pair-workflow.png).
+
+**Example collaborative workflow:** The personified agents discuss and refine a shared
+result. The host client coordinates an owner-controlled
+policy. Providers critique read-only project context; the client applies in-scope
+changes and runs justified checks. Claude and Codex roles can swap with the leading
+client. UI choices and visual checks apply to UI work. Instructions do not provide
+immutable enforcement or a built-in orchestration engine.
+The handshake means a joint recommendation after user acceptance and evidence, rather
+than an automatic release. Scenes pause for two extra seconds and the final delivery
+for eight, so the results remain visible. The linked static preview shows all six
+steps and the shared delivery as an alternative to the animation.
 
 Two global Docker services use the host owner's local Codex/ChatGPT and Claude Code
 subscriptions. Each service exposes `/chat` and `/v1/responses`; a local Node adapter
@@ -227,7 +235,7 @@ setup is unchanged. Ask the client to call `ask_codex` or `ask_claude` with inpu
 
 ```json
 {
-  "prompt": "Review the project README and return three concrete improvements. Do not read secrets.",
+  "prompt": "Critique the project README. Return only supported improvements, up to three; say if none are needed. Do not read secrets.",
   "cwd": "/absolute/path/to/mounted/project"
 }
 ```
@@ -240,10 +248,11 @@ for explicit read-only modes and their limitations.
 Please use the following prompt when you would like both agents to contribute to
 planning, implementation and verification. The complementary review helps surface
 missing cases, and sharing existing test evidence keeps the work grounded without
-repeating completed checks unnecessarily. Tell your client: **“Ask Claude for a plan, send
-the complete plan to Codex for critique, and synthesize the revisions. Propose changes,
-have the other agent review them, reuse valid passing test evidence, run only justified
-affected tests locally, and send the evidence to both agents for analysis.”** Each
+repeating completed checks unnecessarily. Tell your client: **“Ask Claude for a plan,
+then send it to Codex with: 'Strictly critique this plan.' Include the authorized goal,
+constraints and acceptance criteria. Assess supported findings and revise within scope.
+Propose changes, reuse valid passing test evidence, run only justified affected tests,
+then ask the other agent: 'Critique this implementation and test evidence.'”** Each
 provider call is independent, so the client must pass the relevant prior output in the
 next prompt. The containers return
 analysis and proposals; the client's own tools apply edits and execute tests.
@@ -293,6 +302,46 @@ explains an explicit all-projects user rule. Start a new client session after se
 The guide verifies rule loading, tool discovery and actual peer reviews separately.
 These are persistent model instructions, not guaranteed orchestration or a permission
 bypass; the client still owns edits/tests and reports unavailable reviews honestly.
+
+### Keep iterations focused
+
+Please use these gates when applying the collaboration rule. They help keep rigorous
+critique tied to the requested outcome instead of turning suggestions into new work.
+The [canonical policy](.ai-mcp/collaboration.md) makes them mandatory for covered tasks.
+
+| Gate | Required behavior | Benefit |
+| --- | --- | --- |
+| Task contract | Record the outcome, acceptance criteria, non-goals and anticipated change surfaces. Only explicit user steering changes the outcome. | Both agents evaluate the same requested result. |
+| Evidence before corrections | Trace findings to requirements, current artifacts, observed failures or supported risks. Mark assumptions and hypotheses. | Plausible claims do not silently become features or defects. |
+| Triage | Apply justified in-scope fixes; keep optional ideas and unresolved hypotheses in the task record/report. | Useful ideas are preserved without expanding the implementation. |
+| Scope approval | Explain impact and a bounded alternative before material expansion; keep routine authorized choices autonomous. | The user retains control of project direction without repeated approvals for normal work. |
+| Critical, finite review | Ask for strict plan critique and implementation/evidence critique. A supported READY is valid. Stop early, respect the 20-request cap and reserve the final review. | Review can improve the work without inventing defects or running indefinitely. |
+| Reuse evidence | Reuse valid unchanged test/review results; run only justified affected checks. | Time and quota are spent on changed behavior. |
+
+These gates guide the clients; the services do not enforce a task contract, review
+counter or scope-approval workflow. Agreement between models is not proof. Missing
+evidence or review is reported rather than replaced with an unsupported success claim.
+
+### UI criteria and user benefits
+
+For new UI design or redesign, please compare three distinct rendered alternatives
+and explicitly approve a choice before production implementation. For visible changes,
+the following criteria guide the AI review and affected functional checks:
+
+| Criterion | What is checked | Benefit for the user |
+| --- | --- | --- |
+| Simple flows | Clear primary actions, familiar navigation and only necessary controls. | Tasks take fewer confusing steps. |
+| Familiar typography | Existing project fonts unless a change is requested, readable text and consistent spacing. | Screens remain easy to scan and feel consistent. |
+| Accessible interaction | Meaningful labels, readable contrast, keyboard access and visible focus; information is not conveyed by color alone. | More users can understand and operate the interface. |
+| Responsive layouts | Relevant mobile/desktop sizes, wrapping, overflow and usable controls. | Content and actions remain reachable on different screens. |
+| Feedback and recovery | Loading, empty, error and validation states, action feedback and a clear next step. | Users can tell what happened and how to continue. |
+| Working controls | Affected links, buttons, forms, navigation and error handling, supported by actual checks. | The interface performs the actions it promises. |
+| Privacy and performance | Sensitive content in views/review context and relevant interaction or resource costs. | Reviews avoid unnecessary exposure and keep interactions practical. |
+
+An image-capable host inspects actual rendered views. The text-only peer reviews UI
+code, interaction evidence and reported findings; a path or description is not image
+access. Screenshots establish appearance, while functional evidence establishes the
+tested behavior. Reuse unchanged valid evidence and report missing verification.
 
 ## Security layers and limits
 
@@ -368,3 +417,39 @@ to avoid reintroducing removed commits. Rewriting branch history cannot erase ot
 people's clones, forks or GitHub caches. If a credential is published, revoke or rotate
 it; rewriting history does not invalidate it. Never commit private `.env` files,
 credential stores, private keys or machine-specific overrides.
+
+
+### Install and reuse the model
+
+Follow the [step-by-step installation guide](docs/getting-started.md) to start the
+services, register MCP once per native client and install the permanent rules.
+There is no manual Markdown copying:
+
+```bash
+node scripts/install-rules.mjs --project /absolute/path/to/your/project
+# Or use one policy across your native clients' projects:
+node scripts/install-rules.mjs --user
+```
+
+Existing setup always asks **Keep / Override**, defaulting to Keep. Override backs
+up changed existing files and preserves unrelated instructions. In a non-interactive
+AI console, the AI must receive your choice before passing `--existing override`.
+User-scope rules do not grant container access to additional projects.
+
+### Understand the added review usage
+
+Each provider spends its own allowance. An illustrative workload of **10 main calls
+and 2 reviews adds 20% more requests**; it implies 20% more cost only under the
+assumption of equal average cost per request. Actual credits and cash charges depend
+on the providers, models and plans. This is not a measured overhead forecast.
+
+MCP now returns a per-call usage receipt for the initiating client to retain and
+summarize by provider/model, with coverage and unknown values shown. Native token
+counts and API-equivalent estimates are not subscription credits. The initiating
+client's work outside the bridge is unmeasured unless it supplies its own evidence.
+See [usage and cost reporting](docs/usage-and-cost.md) for fields and limitations.
+
+The practical reasons to evaluate this model are critical planning before a large
+patch, earlier supported security/performance findings, smaller changes, explicit
+UI approval and avoiding unnecessary repeat tests. These are intended benefits;
+there are no guaranteed savings or measured defect-reduction percentages.

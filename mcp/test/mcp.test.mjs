@@ -50,7 +50,7 @@ before(async () => {
         return;
       }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ answer: `echo: ${prompt}`, provider: 'codex', model: 'gpt-5.5', sandbox: 'read-only', durationMs: 1 }));
+      res.end(JSON.stringify({ answer: `echo: ${prompt}`, provider: 'codex', model: 'gpt-5.5', sandbox: 'read-only', durationMs: 1, usage: prompt === 'USAGE' ? { source: 'codex.turn.completed', scope: 'per_call', models: [{ model: null, inputTokens: 100, outputTokens: 20, cachedInputTokens: 70, inputIncludesCache: true }], estimatedApiCostUsd: null, subscriptionCredits: null } : null }));
     });
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -125,6 +125,12 @@ test('tools/call happy path forwards prompt and returns the answer', async () =>
   const r = got.get(3).result;
   assert.equal(r.isError, undefined);
   assert.equal(r.content[0].text, 'echo: hello');
+  const receipt = r.structuredContent.receipt;
+  assert.match(receipt.invocationId, /^[0-9a-f-]{36}$/);
+  assert.equal(receipt.provider, 'codex');
+  assert.equal(receipt.usage, null);
+  assert.ok(receipt.durationMs >= 0);
+  assert.deepEqual(JSON.parse(r.content[1].text.replace('AI-MCP usage receipt: ', '')), receipt);
   assert.equal(lastRequest.body.provider, 'codex');
   assert.match(lastRequest.body.conversationId, /^mcp-[0-9a-f-]{36}$/);
   assert.equal(lastRequest.auth, `Bearer ${TOKEN}`);
@@ -152,6 +158,8 @@ test('tools/call surfaces bridge auth failure as isError, not a crash', async ()
   const r = got.get(5).result;
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /unauthorized/i);
+  assert.equal(r.structuredContent.receipt.usage, null);
+  assert.match(r.structuredContent.receipt.invocationId, /^[0-9a-f-]{36}$/);
 });
 
 test('tools/call maps a typed bridge error (rate_limited) into isError content', async () => {
@@ -664,4 +672,20 @@ test('deprecated client launcher settings preserve provider routing during migra
   assert.equal(got.get(192).result.isError, undefined);
   assert.equal(lastRequest.auth, `Bearer ${TOKEN}`);
   assert.equal(lastRequest.body.provider, 'claude');
+});
+
+
+test('tools/call preserves native usage and emits distinct deduplicatable invocation receipts', async () => {
+  const frames = [61, 62].map(id => ({ jsonrpc: '2.0', id, method: 'tools/call',
+    params: { name: 'ask_codex', arguments: { prompt: 'USAGE' } } }));
+  const got = await drive(frames);
+  const first = got.get(61).result;
+  const second = got.get(62).result;
+  const receipt = first.structuredContent.receipt;
+  assert.equal(first.content[0].text, 'echo: USAGE');
+  assert.equal(receipt.usage.models[0].inputTokens, 100);
+  assert.equal(receipt.usage.subscriptionCredits, null);
+  assert.equal(receipt.usage.scope, 'per_call');
+  assert.notEqual(receipt.invocationId, second.structuredContent.receipt.invocationId);
+  assert.deepEqual(JSON.parse(first.content[1].text.replace('AI-MCP usage receipt: ', '')), receipt);
 });

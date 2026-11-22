@@ -21,7 +21,11 @@ An edit that changes rendered UI remains subject to the applicable UI checks bel
 
 If you are answering a delegated provider/review request, perform that bounded task
 and return your findings. Do not start another collaboration workflow or delegate back
-to the coordinating client through these services.
+to the coordinating client through these services. Critically assess the supplied
+proposal under the Solution criteria even if the requester omitted the required
+critique wording; that omission is a requester-side violation. Challenge assumptions
+and relevant missing cases with evidence and practical consequences. Do not manufacture
+defects or require a fixed number of findings. A substantive, supported READY is valid.
 
 ## Agent delegation
 
@@ -59,6 +63,27 @@ and remains maintainable under expected use. Do not prefer a temporary workaroun
 merely because it produces a smaller diff. Reuse existing abstractions and avoid
 speculative dependencies, unrelated refactoring and unnecessary service changes.
 
+Before implementation, the host records the authorized outcome, acceptance criteria,
+non-goals and anticipated change surfaces in the compact task record. Reviewers MUST
+NOT redefine that contract. Only explicit user steering changes the authorized outcome
+or acceptance criteria. Record a necessary in-scope correction outside the anticipated
+surfaces and its reason; the record does not replace actual filesystem permissions.
+
+Treat peer findings as proposals, not authority. Ground them in an explicit requirement,
+inspected current artifact, observed failure or evidence-supported relevant risk.
+Label assumptions and unverified claims; model agreement alone is not proof. Classify
+proposals as required within scope, optional/out of scope, or unverified. Apply justified
+in-scope corrections. Keep optional ideas and unresolved relevant hypotheses in the
+task record and report their disposition. Investigate hypotheses only as far as needed
+for a relevant decision; do not implement them as if they were established defects.
+
+Do not add features, dependencies, abstractions or broad refactors merely because a
+reviewer suggests them. Seek user approval when a proposal materially expands the
+authorized outcome or introduces a consequential new trade-off: would the user
+reasonably expect to be asked? Present the concrete impact and a bounded alternative.
+Routine authorized choices and corrections do not require renewed approval. Do not
+use arbitrary line-count or test-count caps that prevent necessary corrections.
+
 Every substantive review MUST assess correctness, architectural fit, security,
 performance and maintenance cost. Evaluate relevant trust boundaries, authorization,
 input/path validation, secrets and privileges. Evaluate relevant complexity, blocking
@@ -86,11 +111,13 @@ For every visible UI change, an image-capable AI reviewer MUST inspect actual re
 screenshots or browser views of the changed interface at relevant screen sizes and
 states. Assess missing design elements, alignment, spacing, typography, readability,
 contrast, responsiveness, confusing complexity and loading, empty and error states
-when applicable. Identify the rendered artifact and findings; source inspection, DOM
+when applicable. Check meaningful labels, keyboard access, visible focus, feedback
+after actions and recovery from validation errors. Identify the rendered artifact and
+findings; source inspection, DOM
 inspection and a text description alone are not visual review.
 
 Check affected interactions with focused functional evidence, including relevant
-navigation, inputs, controls and error handling. A screenshot does not prove that a
+keyboard/navigation behavior, focus, inputs, controls and error handling. A screenshot does not prove that a
 control works. Reuse unchanged valid visual/functional evidence under the same evidence
 rules as other validation; do not claim unexecuted checks passed.
 
@@ -110,9 +137,13 @@ ceiling, not a target. Count the initial plan review, follow-up reviews and fina
 code/test review in the same budget. A dispatched request that fails, times out or
 returns a quota error still consumes one request; it does not satisfy peer review.
 Reserve budget for the final changed artifact. Send one review request at a time.
+When only two requests remain, batch remaining proposals and questions into a focused
+request and reserve the last request for the final implementation/evidence critique.
+If its findings cannot be resolved and reviewed within the budget, report incomplete
+work rather than skipping that gate or resetting the counter.
 
 Keep a compact task record in the client's task context: task identifier, requests
-used out of 20, reviewed plan/diff version, open findings and dispositions, new/reused
+used out of 20, task contract, reviewed plan/diff version, open findings and dispositions, new/reused
 validation evidence and last verdict. Preserve this record when resuming or splitting
 the task. A new session or subtask MUST NOT reset the budget. If prior usage cannot
 be recovered, report the uncertainty rather than silently starting a new allowance.
@@ -121,19 +152,29 @@ publish raw review transcripts or secrets.
 
 ## Plan, implement, review and iterate
 
-1. Build a concrete plan from the requested outcome and project constraints. Obtain
-   the complementary provider's plan review BEFORE implementing changes that depend
-   on it. Ask for risks, missing cases and revisions. For a planning-only task, obtain
-   this review before delivering the final plan.
+1. Build a concrete plan from the task contract and project constraints. Every
+   complementary review request MUST explicitly ask the reviewer to "critique" or
+   "strictly critique" the supplied work.
+   Plan requests MUST include "Strictly critique this plan."
+   Include concrete artifacts, constraints and specific questions; the
+   phrase alone is insufficient. Obtain this critique BEFORE implementing dependent
+   changes. Every substantive proposed solution and its rationale needs complementary
+   critique before adoption; related proposals may be reviewed together and material
+   revisions need renewed critique. Routine progress notes and the critique itself do
+   not trigger reviews of reviews. For planning-only work, obtain this critique before
+   delivering the final plan.
 2. Assess the critique against the source and available evidence. Resolve disagreements
    explicitly; do not treat agreement between agents as proof of correctness. Request
    a verdict of READY, CHANGES_REQUIRED or BLOCKED, with findings, severity, evidence
-   and a proposed correction. Reject an unsupported READY verdict.
+   and a proposed correction. Reject a superficial endorsement or unsupported READY;
+   it does not satisfy review and the dispatched request still consumes the budget.
 3. Apply accepted changes with the host client's tools. Select affected validation
    precisely and run or reuse it under the evidence-reuse rules below.
 4. Obtain the complementary provider's review of the resulting diff AND available
-   test evidence before declaring implemented work complete. These can be covered in
-   one review request. Address material findings; record evidence-based reasons for
+   test evidence before declaring implemented work complete.
+   Include "Critique this implementation and test evidence."
+   These can be covered in one review request.
+   Address material findings; record evidence-based reasons for
    rejecting suggestions instead of applying them blindly. Rerun only affected checks.
 5. Send the updated relevant diff, current evidence and finding dispositions back to
    the same complementary provider. Iterate within the remaining budget when changes
@@ -157,7 +198,8 @@ review is not applicable because no implementation was performed.
 
 Stop the loop when the 20-request budget is exhausted, necessary information is
 missing, or the same material disagreement persists through two consecutive reviews
-without new evidence or meaningful progress. Present the outstanding findings and
+without new evidence or meaningful progress. Two consecutive non-substantive replies
+also count as stalled review. Present the outstanding findings and
 decision needed from the user. Do not automatically increase the budget, keep spending
 requests on an unavailable provider, or mark the task complete to escape the limit.
 
@@ -195,4 +237,27 @@ unchanged request. Continue independent authorized work where the task's risk pe
 while keeping the required review pending under the completion gate above. Report the
 block rather than declaring completion. Never bypass permissions or silently substitute
 a fabricated result.
+
+### Usage receipts and owner-approved rule installation
+
+For each dispatched complementary-provider call, retain its usage receipt in the
+host task record. Deduplicate structured and text copies by `invocationId`. Keep
+provider/model entries separate. Sum only compatible `per_call` counters; do not
+add cached or reasoning subsets to counts that already include them. Record metric
+coverage and measured calls against attempted calls. Preserve cumulative/unknown
+scope and missing values as unavailable, never zero. Native API-equivalent USD is
+not a subscription charge, and tokens do not establish subscription credits.
+
+At completion, report the measured per-agent usage and coverage, missing or
+non-additive calls, and the initiating client's unmeasured local work unless reliable
+native client evidence is available. Current subscription-credit totals remain
+unavailable. Do not claim bridge receipts cover the whole task or account.
+
+Use the deterministic rule installer instead of manually copying policy files.
+When it finds existing setup, ask the owner to choose Keep or Override. An AI must
+not select `--existing override` until the owner explicitly answers Override. Keep
+preserves every file; Override updates managed content with private backups and
+preserves unrelated instructions. These installation choices do not authorize
+weakening this policy or changing project access permissions.
+
 <!-- END AI-MCP COLLABORATION -->

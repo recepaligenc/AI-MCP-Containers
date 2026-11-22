@@ -327,6 +327,7 @@ app.MapPost("/chat", async (
         // else "default". Never claim a model the backend didn't run.
         Model = result.Model ?? v.Model ?? "default",
         Sandbox = v.Sandbox,
+        Usage = result.Usage,
         DurationMs = sw.ElapsedMilliseconds,
     });
 });
@@ -402,7 +403,7 @@ app.MapPost("/v1/responses", async (
         // the instance's own provider on its CLI default, so the request model is not authoritative.
         // Fall back to "<provider>-default" so the logged model still names the real backend.
         var servedModel = result.Model ?? $"{defaultProvider}-default";
-        return Results.Json(ResponsesApi.BuildResponse(result.Output, servedModel, defaultProvider));
+        return Results.Json(ResponsesApi.BuildResponse(result.Output, servedModel, defaultProvider, result.Usage));
     }
 });
 

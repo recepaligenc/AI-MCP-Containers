@@ -78,9 +78,8 @@ public class ResponsesApiTests
         var text = root.GetProperty("output")[0].GetProperty("content")[0].GetProperty("text").GetString();
         Assert.Equal("the answer", text);
 
-        // usage block present and zeroed (subscription = no per-token billing)
+        // Missing native usage stays unavailable; subscription billing cannot be inferred.
         var usage = root.GetProperty("usage");
-        Assert.Equal(0, usage.GetProperty("input_tokens").GetInt32());
-        Assert.Equal(0, usage.GetProperty("output_tokens").GetInt32());
+        Assert.Equal(JsonValueKind.Null, usage.ValueKind);
     }
 }

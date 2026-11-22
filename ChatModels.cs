@@ -30,6 +30,7 @@ public sealed record ChatResponse
     public required string Model { get; init; }
     public required string Sandbox { get; init; }
     public required long DurationMs { get; init; }
+    public ProviderUsage? Usage { get; init; }
 }
 
 /// <summary>Uniform error envelope shared by every route.</summary>

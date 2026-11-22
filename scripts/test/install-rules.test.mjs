@@ -1,0 +1,118 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { installRules } from '../install-rules.mjs';
+
+async function fixture(t) {
+  const root = await fs.mkdtemp(join(tmpdir(), 'ai-mcp-rules-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  return root;
+}
+const wrap = text => `<!-- BEGIN AI-MCP COLLABORATION -->\n${text}\n<!-- END AI-MCP COLLABORATION -->\n`;
+const options = { template: wrap('# Owner policy'), log() {} };
+
+test('project installation preserves unrelated instructions and active client files', async t => {
+  const root = await fixture(t);
+  await fs.writeFile(join(root, 'AGENTS.md'), 'Existing owner instruction.\n');
+  await fs.writeFile(join(root, 'AGENTS.override.md'), 'Priority instruction.\n');
+  await fs.mkdir(join(root, '.claude'));
+  await fs.writeFile(join(root, '.claude', 'CLAUDE.md'), 'Existing Claude rule.\n');
+  const result = await installRules({ ...options, project: root });
+  assert.equal(result.status, 'installed');
+  assert.equal(await fs.readFile(result.canonical, 'utf8'), options.template);
+  assert.match(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), /^Existing owner instruction\./);
+  assert.match(await fs.readFile(join(root, 'AGENTS.override.md'), 'utf8'), /Priority instruction\.[\s\S]*collaboration\.md/);
+  assert.match(await fs.readFile(join(root, '.claude', 'CLAUDE.md'), 'utf8'), /@\.\.\/\.ai-mcp\/collaboration\.md/);
+  await assert.rejects(fs.access(join(root, 'CLAUDE.md')));
+});
+
+test('existing identical installation warns; non-TTY refuses without writes and Keep preserves timestamps', async t => {
+  const root = await fixture(t);
+  const first = await installRules({ ...options, project: root });
+  const before = await Promise.all(first.changed.map(async path => [path, await fs.readFile(path, 'utf8'), (await fs.stat(path)).mtimeMs]));
+  const logs = [];
+  await assert.rejects(installRules({ ...options, project: root, log: value => logs.push(value) }), /choose --existing/);
+  assert.match(logs[0], /Existing AI-MCP/);
+  assert.equal((await installRules({ ...options, project: root, existing: 'keep' })).status, 'kept');
+  assert.equal((await installRules({ ...options, project: root, interactive: true, choose: async () => 'keep' })).status, 'kept');
+  for (const [path, text, mtime] of before) {
+    assert.equal(await fs.readFile(path, 'utf8'), text);
+    assert.equal((await fs.stat(path)).mtimeMs, mtime);
+  }
+  await assert.rejects(fs.access(join(root, '.ai-mcp', 'backups')));
+});
+
+test('explicit Override updates managed policy, preserves owner text and creates private backups', async t => {
+  const root = await fixture(t);
+  await fs.writeFile(join(root, 'AGENTS.md'), 'Owner instructions.\n');
+  await installRules({ ...options, project: root });
+  const result = await installRules({ ...options, project: root, existing: 'override', template: wrap('# New owner policy') });
+  assert.equal(await fs.readFile(result.canonical, 'utf8'), wrap('# New owner policy'));
+  assert.match(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), /^Owner instructions\./);
+  assert.equal((await fs.stat(result.backup)).mode & 0o777, 0o700);
+  const index = JSON.parse(await fs.readFile(join(result.backup, 'index.json'), 'utf8'));
+  assert.equal(index.length, 1);
+  assert.equal(await fs.readFile(join(result.backup, index[0].file), 'utf8'), options.template);
+  assert.equal((await fs.stat(join(result.backup, index[0].file))).mode & 0o777, 0o600);
+});
+
+test('global installation has one canonical policy and respects custom config roots with spaces', async t => {
+  const root = await fixture(t);
+  const codexRoot = join(root, 'Codex Config');
+  const claudeRoot = join(root, 'Claude Config');
+  await fs.mkdir(codexRoot);
+  await fs.writeFile(join(codexRoot, 'AGENTS.override.md'), 'Global priority.\n');
+  const result = await installRules({ ...options, user: true, codexRoot, claudeRoot });
+  assert.equal(result.canonical, join(claudeRoot, '.ai-mcp', 'collaboration.md'));
+  assert.match(await fs.readFile(join(claudeRoot, 'CLAUDE.md'), 'utf8'), /@\.ai-mcp\/collaboration\.md/);
+  assert.ok((await fs.readFile(join(codexRoot, 'AGENTS.override.md'), 'utf8')).includes(JSON.stringify(result.canonical)));
+  await assert.rejects(fs.access(join(codexRoot, '.ai-mcp', 'collaboration.md')));
+});
+
+test('symlinked destinations and ambiguous managed blocks fail before writes', async t => {
+  const root = await fixture(t);
+  const outside = await fixture(t);
+  await fs.symlink(outside, join(root, '.ai-mcp'));
+  await assert.rejects(installRules({ ...options, project: root }), /symlink/);
+  assert.deepEqual(await fs.readdir(outside), []);
+  await fs.unlink(join(root, '.ai-mcp'));
+  await fs.writeFile(join(root, 'AGENTS.md'), '<!-- BEGIN AI-MCP COLLABORATION -->\nbroken');
+  await assert.rejects(installRules({ ...options, project: root }), /Ambiguous/);
+  await assert.rejects(fs.access(join(root, '.ai-mcp')));
+});
+
+
+test('Override preserves surrounding canonical owner rules and rejects ambiguous canonical blocks', async t => {
+  const root = await fixture(t);
+  const first = await installRules({ ...options, project: root });
+  await fs.writeFile(first.canonical, 'Owner preface.\n' + options.template + 'Owner appendix.\n');
+  await installRules({ ...options, project: root, existing: 'override', template: wrap('# Revised policy') });
+  assert.equal(await fs.readFile(first.canonical, 'utf8'), 'Owner preface.\n' + wrap('# Revised policy') + 'Owner appendix.\n');
+  await fs.writeFile(first.canonical, '<!-- BEGIN AI-MCP COLLABORATION -->\nbroken');
+  const agentsBefore = await fs.readFile(join(root, 'AGENTS.md'), 'utf8');
+  await assert.rejects(installRules({ ...options, project: root, existing: 'override' }), /Ambiguous/);
+  assert.equal(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
+});
+
+test('CLI installs the actual template and requires a non-interactive existing-setup choice', async t => {
+  const root = await fixture(t);
+  const script = fileURLToPath(new URL('../install-rules.mjs', import.meta.url));
+  const run = extra => spawnSync(process.execPath, [script, '--project', root, ...extra], { encoding: 'utf8' });
+  const initial = run([]);
+  assert.equal(initial.status, 0, initial.stderr);
+  const canonical = join(root, '.ai-mcp', 'collaboration.md');
+  const before = await fs.readFile(canonical, 'utf8');
+  const mtime = (await fs.stat(canonical)).mtimeMs;
+  const undecided = run([]);
+  assert.equal(undecided.status, 1);
+  assert.match(undecided.stdout, /Existing AI-MCP/);
+  assert.match(undecided.stderr, /No files were changed/);
+  const kept = run(['--existing', 'keep']);
+  assert.equal(kept.status, 0, kept.stderr);
+  assert.equal(await fs.readFile(canonical, 'utf8'), before);
+  assert.equal((await fs.stat(canonical)).mtimeMs, mtime);
+});

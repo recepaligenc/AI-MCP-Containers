@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace AiMcpContainers;
 
 /// <param name="Model">The model the backend actually used, when the CLI reports it (null = unknown).</param>
-public sealed record CodexResult(bool Ok, string Output, string? ErrorCode, string? ErrorMessage, string? Model = null, DateTimeOffset? RetryAtUtc = null, string? LimitKind = null);
+public sealed record CodexResult(bool Ok, string Output, string? ErrorCode, string? ErrorMessage, string? Model = null, DateTimeOffset? RetryAtUtc = null, string? LimitKind = null, ProviderUsage? Usage = null);
 
 /// <summary>One agent backend (codex or claude). Same contract regardless of CLI.</summary>
 public interface IAgentRunner
@@ -328,8 +328,7 @@ public sealed class CodexRunner : IAgentRunner
             psi.ArgumentList.Add("--model");
             psi.ArgumentList.Add(model);
         }
-        if (captureSession)
-            psi.ArgumentList.Add("--json");
+        psi.ArgumentList.Add("--json");
         if (_opts.Ephemeral && string.IsNullOrEmpty(resumeSessionId))
             psi.ArgumentList.Add("--ephemeral");
         psi.ArgumentList.Add("--output-last-message");
@@ -397,7 +396,8 @@ public sealed class CodexRunner : IAgentRunner
 
         var stdout = await drain; // ensure pipe fully consumed
         var threadId = captureSession ? TryParseThreadIdFromJsonEvents(stdout) : null;
-        var inputTokens = captureSession ? TryParseLastInputTokensFromJsonEvents(stdout) : null;
+        var nativeUsage = NativeUsage.ParseCodexEvents(stdout, resumeSessionId is not null);
+        var inputTokens = captureSession ? nativeUsage.LastInputTokens : null;
 
         if (proc.ExitCode != 0)
         {
@@ -429,7 +429,7 @@ public sealed class CodexRunner : IAgentRunner
 
         // Report the effective model: an explicit request override wins, else config.toml's model.
         var servedModel = !string.IsNullOrEmpty(model) ? model : _configModel;
-        return new ProcessRun(new CodexResult(true, answer, null, null, servedModel), threadId, inputTokens, null);
+        return new ProcessRun(new CodexResult(true, answer, null, null, servedModel, Usage: nativeUsage.Usage), threadId, inputTokens, null);
     }
 
     public static string WithSessionContextGuard(string prompt) =>
@@ -467,36 +467,8 @@ public sealed class CodexRunner : IAgentRunner
         return null;
     }
 
-    public static long? TryParseLastInputTokensFromJsonEvents(string stdout)
-    {
-        long? inputTokens = null;
-        foreach (var rawLine in stdout.Split('\n'))
-        {
-            var line = rawLine.Trim();
-            if (line.Length == 0 || line[0] != '{') continue;
-
-            try
-            {
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("type", out var type)
-                    && type.GetString() == "turn.completed"
-                    && root.TryGetProperty("usage", out var usage)
-                    && usage.ValueKind == JsonValueKind.Object
-                    && usage.TryGetProperty("input_tokens", out var input)
-                    && input.ValueKind == JsonValueKind.Number
-                    && input.TryGetInt64(out var n))
-                {
-                    inputTokens = n;
-                }
-            }
-            catch (JsonException)
-            {
-                // Ignore non-JSON diagnostic lines around the JSONL event stream.
-            }
-        }
-        return inputTokens;
-    }
+    public static long? TryParseLastInputTokensFromJsonEvents(string stdout) =>
+        NativeUsage.ParseCodexEvents(stdout).LastInputTokens;
 
     public static bool LooksLikeSessionRolloverFailure(string detail)
     {

@@ -286,6 +286,11 @@ async function handle(msg) {
         reply(id, { isError: true, content: [{ type: 'text', text: "Invalid arguments: 'sandbox' must be a supported read-only mode." }] });
         return;
       }
+      const invocationId = randomUUID();
+      const started = process.hrtime.bigint();
+      const receipt = usage => ({ invocationId, provider: CFG.provider,
+        durationMs: Number((process.hrtime.bigint() - started) / 1_000_000n), usage: usage ?? null });
+      const receiptContent = value => ({ type: 'text', text: `AI-MCP usage receipt: ${JSON.stringify(value)}` });
       inFlight++;
       const requestController = new AbortController();
       requestControllers.set(id, requestController);
@@ -294,11 +299,15 @@ async function handle(msg) {
         const data = await callBridge(prompt, args.cwd, args.sandbox, requestController.signal);
         const ms = Number((process.hrtime.bigint() - t0) / 1_000_000n);
         log('info', 'chat ok', { provider: CFG.provider, model: data.model, ms });
-        reply(id, { content: [{ type: 'text', text: data.answer }] });
+        const usageReceipt = receipt(data.usage);
+        reply(id, { content: [{ type: 'text', text: data.answer }, receiptContent(usageReceipt)],
+          structuredContent: { receipt: usageReceipt } });
       } catch (e) {
         log('warn', 'chat failed', { provider: CFG.provider, error: e.message });
         // Tool-level error → isError content so the model sees it (not a protocol error).
-        reply(id, { isError: true, content: [{ type: 'text', text: e.message }] });
+        const usageReceipt = receipt(null);
+        reply(id, { isError: true, content: [{ type: 'text', text: e.message }, receiptContent(usageReceipt)],
+          structuredContent: { receipt: usageReceipt } });
       } finally {
         requestControllers.delete(id);
         inFlight--;

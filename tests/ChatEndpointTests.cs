@@ -407,14 +407,17 @@ public class ChatEndpointTests
     {
         using var app = new TestApp();
         // Runner ran a different model than any the caller might request.
-        app.Runner.Next = new CodexResult(true, "answer", null, null, Model: "claude-sonnet-4-6-20250930");
+        app.Runner.Next = new CodexResult(true, "answer", null, null, Model: "claude-sonnet-4-6-20250930",
+            Usage: NativeUsage.FromClaudeResult("""{"modelUsage":{"main":{"inputTokens":10,"outputTokens":2}}}"""));
         using var client = app.CreateClient();
 
         var resp = await client.PostAsJsonAsync("/chat", new { prompt = "hi", model = "gpt-5" });
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<ChatResponse>();
-        Assert.Equal("claude-sonnet-4-6-20250930", body!.Model); // actual, not the requested "gpt-5"
+        Assert.Equal("claude-sonnet-4-6-20250930", body!.Model);
+        Assert.Equal("per_call", body.Usage!.Scope);
+        Assert.Equal(10, Assert.Single(body.Usage.Models).InputTokens); // actual, not the requested "gpt-5"
     }
 
     [Fact]

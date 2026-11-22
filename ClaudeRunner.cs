@@ -498,7 +498,7 @@ public sealed class ClaudeRunner : IAgentRunner
         }
 
         var (answer, servedModel) = ParseJsonResult(raw);
-        return new ClaudeProcessRun(new CodexResult(true, answer, null, null, servedModel), sessionId, inputTokens, null);
+        return new ClaudeProcessRun(new CodexResult(true, answer, null, null, servedModel, Usage: NativeUsage.FromClaudeResult(raw, resumeSessionId is not null)), sessionId, inputTokens, null);
     }
 
     /// <summary>

@@ -189,10 +189,12 @@ public class CodexRunnerSessionTests
             },
             NullLogger<CodexRunner>.Instance);
 
-        await runner.RunAsync("first", cwd: null, model: null, sandbox: "read-only", conversationId: null, CancellationToken.None);
+        var result = await runner.RunAsync("first", cwd: null, model: null, sandbox: "read-only", conversationId: null, CancellationToken.None);
 
         var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Root, "args.log")));
         Assert.Contains("--ephemeral", line);
+        Assert.Contains("--json", line);
+        Assert.Equal("per_call", result.Usage!.Scope);
         Assert.DoesNotContain("exec resume", line);
     }
 
@@ -209,6 +211,7 @@ public class CodexRunnerSessionTests
         Assert.False(first.Ok);
         Assert.False(second.Ok);
         Assert.Equal("rate_limited", first.ErrorCode);
+        Assert.Null(first.Usage);
         Assert.Equal("rate_limited", second.ErrorCode);
 
         var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Root, "args.log")));
@@ -438,7 +441,8 @@ public class CodexRunnerSessionTests
               esac
             done
             cat >/dev/null
-            printf '%s\n' "You've hit your usage limit · resets 11:59pm (UTC)" >&2
+            printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+            printf '%s\n' '{"type":"error","message":"HTTP 429 usage limit · resets 11:59pm (UTC)"}'
             exit 1
             """;
         File.WriteAllText(script, body.Replace("__ROOT__", root));

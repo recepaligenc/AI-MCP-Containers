@@ -98,12 +98,8 @@ public static class ResponsesApi
         return "";
     }
 
-    /// <summary>
-    /// Shape the agent's answer as an OpenAI Responses payload. The usage block reports zeros:
-    /// bridge providers run on a subscription with no per-token billing, so zero cost is the
-    /// honest value (the caller's cost tracker will price it at $0).
-    /// </summary>
-    public static object BuildResponse(string answer, string model, string provider) => new
+    /// <summary>Native usage is optional; subscription credits cannot be inferred from tokens.</summary>
+    public static object BuildResponse(string answer, string model, string provider, ProviderUsage? providerUsage = null) => new
     {
         id = "resp_bridge",
         @object = "response",
@@ -123,12 +119,7 @@ public static class ResponsesApi
             }
         },
         output_text = answer,
-        usage = new
-        {
-            input_tokens = 0,
-            output_tokens = 0,
-            total_tokens = 0,
-            input_tokens_details = new { cached_tokens = 0 }
-        }
+        usage = NativeUsage.ToResponsesUsage(providerUsage),
+        provider_usage = providerUsage
     };
 }

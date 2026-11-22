@@ -38,20 +38,22 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
    Back up affected private configuration files privately and merge idempotently.
    Reuse the existing two provider services and their credentials; leave server mounts
    and provider permissions unchanged. Report unavailable prerequisites explicitly.
-3. Copy the shared collaboration template, including its BEGIN/END AI-MCP
-   COLLABORATION markers, into .ai-mcp/collaboration.md in the target project.
-   Preserve existing content outside that block and update the block idempotently
-   instead of duplicating it or replacing unrelated rules. This request authorizes
-   initial installation. If an existing owner-controlled policy differs, preserve it
-   and present the proposed policy change unless I explicitly authorized that change.
-4. Add a managed instruction to the active project Codex guidance file to read and
-   follow .ai-mcp/collaboration.md. Use AGENTS.md unless an existing non-empty
-   AGENTS.override.md is the active guidance; preserve it instead of creating a new
-   override that would shadow other instructions.
-5. Add the shared rule as an import in the existing active project Claude guidance:
-   use @.ai-mcp/collaboration.md in root CLAUDE.md, or
-   @../.ai-mcp/collaboration.md in .claude/CLAUDE.md. Create root CLAUDE.md if neither
-   exists. Preserve other instructions and add each pointer/import only once.
+3. Run the deterministic rule installer from the checkout:
+   node scripts/install-rules.mjs --project /absolute/path/to/target/project
+   Use the target root discovered above. Do not manually copy Markdown files.
+   If AI-MCP setup already exists, show its warning and ask me Keep or Override;
+   Keep is the default and must make no changes. In a non-interactive console,
+   rerun with --existing keep or --existing override only after I answer. Never
+   select Override on my behalf. Override backs up changed existing files and
+   preserves unrelated instructions. Do not weaken the policy during installation.
+4. For rules across my native clients' projects, use --user only if I choose that
+   scope. It installs one canonical policy in the Claude config root and references
+   it from both clients. Respect CODEX_HOME and CLAUDE_CONFIG_DIR. Both clients need
+   access to that policy; the installer does not grant mounts or filesystem access.
+5. Report the actual canonical path and active Codex/Claude reference paths. Preserve
+   existing AGENTS.override.md precedence and Claude instruction layout. Start a
+   new session to load newly installed instructions; an installer exit code alone
+   does not prove client discovery or adherence.
 6. Verify saved rule contents, active instruction paths, imports and MCP registration.
    Reuse unchanged passing evidence; do not rerun project tests for this setup change.
    Verify automatic guidance discovery in a fresh session using the client's loaded-
@@ -60,9 +62,10 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
    persistence. Do not enable plaintext session logging automatically or expose full
    logs. If you cannot inspect fresh-session loading, leave that verification pending.
 7. In the fresh session, verify the mandatory workflow with a small synthetic plan
-   and patch proposal, without changing application files. Obtain an actual plan
-   review from the complementary provider, revise the proposal, then obtain a review
-   of the proposal and its test strategy. Label synthetic examples and unexecuted
+   and patch proposal, without changing application files. Ask the complementary
+   provider: "Strictly critique this plan." Revise from supported findings, then ask:
+   "Critique this implementation and test evidence." Include the synthetic proposal
+   and its test strategy, with concrete constraints and questions. Label synthetic examples and unexecuted
    tests honestly. This explicitly requested functional check may consume provider
    quota and counts toward the shared 20-request task budget. Reuse valid existing
    evidence and stop on quota/availability failure rather than retrying unchanged calls.
@@ -108,6 +111,15 @@ review tasks; the host client applies edits and executes only justified checks.
 Missing reviews and quota failures block a completion claim unless the user explicitly
 waives the review for that task. A waiver is reported as a waiver, never as a review.
 
+Every peer-review request explicitly asks for critique; plan reviews use
+"Strictly critique this plan." The reviewer challenges assumptions and relevant missing cases
+with evidence, rather than merely endorsing the proposal. No fixed number of defects
+is required. The host keeps the task's outcome, acceptance criteria and non-goals
+stable unless the user changes them. Optional ideas and unverified findings are
+recorded separately from justified in-scope corrections; material expansion needs
+user approval. This helps preserve project direction while still allowing necessary
+fixes. See the [scope and evidence gates](../README.md#keep-iterations-focused).
+
 For UI design or redesign, present three distinct visual mockup alternatives and
 obtain the user's explicit approval before applying the design. Preserve existing
 fonts unless requested otherwise, and favor simple interactions. Every visible UI
@@ -124,7 +136,8 @@ exception. Keep unrelated project rules and review authorized changes to the pol
 This repository activates the rule for its own future sessions through root
 `AGENTS.md`, root `CLAUDE.md` and [the canonical policy](../.ai-mcp/collaboration.md).
 The [template](templates/ai-mcp-collaboration.md) matches that policy. Other projects
-receive it only when you explicitly run the installation recipe there.
+receive it through the automatic installer, or use one user-level policy across projects.
+See the [step-by-step installation guide](getting-started.md) for setup and Keep/Override choices.
 
 Typical project layout:
 
@@ -173,14 +186,18 @@ new functional requests consume provider quota.
 ```text
 Follow the project's persistent instructions. First identify automatically loaded
 guidance from the client's loaded-file view or approved startup evidence, and verify
-that its pointer/import leads to .ai-mcp/collaboration.md. Do not count a manually
+that its pointer/import leads to the installed canonical collaboration policy
+(project scope or user scope). Do not count a manually
 forced file read or an unsupported self-report as persistence evidence. If automatic
 loading cannot be inspected, report it as pending. State the mandatory review stages
 and the current task's request count out of 20. Verify MCP registration/tool discovery.
 
-Then exercise the rule with a small synthetic implementation plan. Obtain a real
-review from the complementary provider, revise a synthetic patch proposal, and
-obtain a review of the proposal and its test strategy. Keep application files
+Then exercise the rule with a small synthetic implementation plan. Ask the
+complementary provider: "Strictly critique this plan." Revise a synthetic patch
+proposal using supported findings, then ask:
+"Critique this implementation and test evidence."
+Include the proposal and test strategy, constraints and specific questions.
+Keep application files
 unchanged and label all synthetic or unexecuted test evidence. Reuse prior valid
 evidence; do not repeat project tests merely for setup. Report rule loading, tool
 discovery and actual peer-review responses separately, with pending/failed steps.
@@ -217,18 +234,27 @@ See [Claude's loading checks](https://code.claude.com/docs/en/memory#my-agentsmd
 After installation, the saved rule is intended to apply without repeating a prompt.
 Please use this task prompt when you would like to restate the completion conditions
 for a particular development task. It gives both agents shared acceptance criteria
-and helps keep changes focused, reviews evidence-based, and completed tests from
-being repeated unnecessarily.
+and helps keep changes focused, reviews critical and evidence-based, and completed
+tests from being repeated unnecessarily.
 
 ```text
 Apply the persistent Claude-Codex collaboration rule as a completion requirement
 for this development task. If you are Codex, use ask_claude as the peer; if you are
-Claude Code, use ask_codex. Obtain a real plan review before implementation.
+Claude Code, use ask_codex. Record the authorized outcome, acceptance criteria,
+non-goals and anticipated change surfaces. Before implementation, ask the peer:
+"Strictly critique this plan." Include the concrete proposal, constraints and questions.
 
 Choose the smallest sufficient durable change that fits this service's architecture.
 Have the peer assess correctness, security, performance and maintenance cost. Evaluate
 findings against evidence, implement justified corrections and resubmit the relevant
 changes and test evidence. Do not apply suggestions blindly or expand unrelated scope.
+Require critique of each substantive solution and its rationale before adoption;
+batch related proposals. Treat hypotheses as unverified, park optional ideas, and
+apply only justified in-scope corrections. Ask me before a material scope expansion,
+with its impact and a bounded alternative; routine authorized choices need no new
+approval. For final review ask: "Critique this implementation and test evidence."
+An endorsement without substantive assessment does not satisfy review. A supported
+READY with no defects is valid; do not manufacture problems to continue iterating.
 
 For UI design or redesign, first present three distinct visual mockup alternatives
 and wait for my explicit approval before implementing the design. Preserve existing
@@ -269,3 +295,13 @@ Persistent rules are model context, not enforced security controls or a guarante
 every step will execute. See [Claude's instruction guidance](https://code.claude.com/docs/en/memory#write-effective-instructions).
 Report the actual reviews/tests performed; use application enforcement separately when
 an operation must be guaranteed or forbidden.
+
+
+## Usage reporting after a task
+
+The task policy asks the host to retain MCP usage receipts and report measured
+per-agent/model counts with coverage. This helps you distinguish a small review
+workload from the initiating client's separate work. Missing subscription credits
+remain unavailable, and duplicate text/structured receipts count once. See
+[usage and cost reporting](usage-and-cost.md) for the illustrative overhead example
+and measurement limits. This is host task-record behavior, not a server billing ledger.
