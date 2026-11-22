@@ -35,6 +35,19 @@ before(async () => {
         res.end(JSON.stringify({ error: "Sandbox 'read-only' cannot run for provider 'codex' on this bridge.", code: 'sandbox_unavailable' }));
         return;
       }
+      if (prompt.startsWith('QUOTA')) {
+        const malformed = prompt === 'QUOTA_MALFORMED';
+        res.writeHead(429, { 'content-type': 'application/json', 'retry-after': malformed ? 'not-a-date' : '120' });
+        res.end(JSON.stringify({ error: 'quota reached', code: 'rate_limited',
+          retryAtUtc: malformed ? 'tomorrow' : '2030-01-02T03:04:05Z',
+          limitKind: malformed ? { bad: true } : 'weekly' }));
+        return;
+      }
+      if (prompt === 'RETRY_HTTPDATE') {
+        res.writeHead(503, { 'content-type': 'text/plain', 'retry-after': 'Wed, 02 Jan 2030 03:04:05 GMT' });
+        res.end('maintenance');
+        return;
+      }
       if (prompt.includes('BOOM')) {
         res.writeHead(429, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'slow down', code: 'rate_limited' }));
@@ -168,6 +181,30 @@ test('tools/call maps a typed bridge error (rate_limited) into isError content',
   const r = got.get(6).result;
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /rate_limited/);
+  assert.deepEqual(r.structuredContent.errorDetails, { code: 'rate_limited', httpStatus: 429 });
+});
+
+test('tools/call preserves typed retry metadata and ignores malformed optional values', async () => {
+  for (const prompt of ['QUOTA', 'QUOTA_MALFORMED']) {
+    const got = await drive([{ jsonrpc: '2.0', id: 61, method: 'tools/call', params: { name: 'ask_codex', arguments: { prompt } } }]);
+    const r = got.get(61).result;
+    assert.equal(r.isError, true);
+    assert.match(r.structuredContent.error, /rate_limited/);
+    assert.deepEqual(r.structuredContent.errorDetails, prompt === 'QUOTA'
+      ? { code: 'rate_limited', httpStatus: 429, retryAtUtc: '2030-01-02T03:04:05Z', limitKind: 'weekly', retryAfterSeconds: 120 }
+      : { code: 'rate_limited', httpStatus: 429 });
+  }
+});
+
+test('tools/call preserves HTTP-date retry headers with non-JSON error fallback', async () => {
+  const got = await drive([{ jsonrpc: '2.0', id: 62, method: 'tools/call', params: { name: 'ask_codex', arguments: { prompt: 'RETRY_HTTPDATE' } } }]);
+  const result = got.get(62).result;
+  assert.equal(result.isError, true);
+  const details = result.structuredContent.errorDetails;
+  assert.equal(details.code, 'http_503');
+  assert.equal(details.httpStatus, 503);
+  assert.ok(Number.isSafeInteger(details.retryAfterSeconds) && details.retryAfterSeconds > 0);
+  assert.match(result.structuredContent.error, /HTTP 503/);
 });
 
 test('unknown tool name returns a JSON-RPC error', async () => {
@@ -711,7 +748,7 @@ test('structured output carries the answer or the error, so a host that surfaces
   assert.equal(failedResult.isError, true);
   assert.match(failedResult.content[0].text, /unauthorized/i);
   assert.equal(failedResult.structuredContent.error, failedResult.content[0].text);
-  assert.deepEqual(Object.keys(failedResult.structuredContent).sort(), ['error', 'receipt']);
+  assert.deepEqual(Object.keys(failedResult.structuredContent).sort(), ['error', 'errorDetails', 'receipt']);
   assert.deepEqual(failedResult.structuredContent.receipt, receiptOf(failedResult));
 });
 

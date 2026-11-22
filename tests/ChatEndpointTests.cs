@@ -42,6 +42,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
     /// <summary>Pinned so the suite never depends on whether the host can run bubblewrap.</summary>
     public string InnerSandbox { get; init; } = "available";
     public string Providers { get; init; } = "";
+    public string? MaxOutputBytes { get; init; }
 
     public new HttpClient CreateClient()
     {
@@ -65,6 +66,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
         builder.UseSetting("AiMcp:ReadOnlyProjects", ReadOnlyProjects.ToString());
         builder.UseSetting("AiMcp:DefaultCwd", "/tmp");
         builder.UseSetting("AiMcp:Token", Token ?? "");
+        if (MaxOutputBytes is not null) builder.UseSetting("AI_MCP_MAX_OUTPUT_BYTES", MaxOutputBytes);
 
         builder.ConfigureServices(services =>
         {
@@ -81,6 +83,72 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
 public class ChatEndpointTests
 {
+    [Fact]
+    public async Task Codex_quota_retry_information_reaches_http_clients()
+    {
+        using var app = new TestApp { Providers = "codex" };
+        using var client = app.CreateClient();
+        var until = DateTimeOffset.UtcNow.AddMinutes(5);
+        app.Runner.Next = new(false, "", "rate_limited", "quota", RetryAtUtc: until);
+        using var response = await client.PostAsJsonAsync("/chat", new { prompt = "p" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.True(response.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+        Assert.Equal(until, (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.RetryAtUtc);
+        using var compatibility = await client.PostAsJsonAsync("/v1/responses", new { input = "p" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, compatibility.StatusCode);
+        Assert.True(compatibility.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+        Assert.Equal(until, (await compatibility.Content.ReadFromJsonAsync<ErrorResponse>())!.RetryAtUtc);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("not-a-number")]
+    [InlineData("67108865")]
+    public void Invalid_output_budget_fails_startup(string value)
+    {
+        using var app = new TestApp { MaxOutputBytes = value };
+        var error = Assert.ThrowsAny<Exception>(() => app.CreateClient());
+        Assert.Contains("AI_MCP_MAX_OUTPUT_BYTES", error.ToString());
+    }
+
+    [Fact]
+    public async Task Readiness_requires_authentication_and_makes_no_model_calls()
+    {
+        using var app = new TestApp { Token = TestApp.ExplicitToken };
+        using var client = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/ready")).StatusCode);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", TestApp.ExplicitToken);
+        var response = await client.GetAsync("/ready");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("unknown", json);
+        Assert.DoesNotContain("/bin/sh", json);
+        Assert.Equal(0, app.Runner.Calls);
+        Assert.Equal(0, app.ClaudeRunner.Calls);
+    }
+
+    [Fact]
+    public async Task Readiness_reflects_known_quota_and_recovery()
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        var health = app.Services.GetRequiredService<ProviderHealth>();
+        health.Observe("codex", new(false, "", "rate_limited", "quota", RetryAtUtc: DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/ready")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
+        health.Observe("codex", new(true, "ok", null, null));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/ready")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Readiness_rejects_a_default_sandbox_that_cannot_start()
+    {
+        using var app = new TestApp { Providers = "codex", InnerSandbox = "unavailable" };
+        using var client = app.CreateClient();
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/ready")).StatusCode);
+        Assert.Equal(0, app.Runner.Calls);
+    }
+
     [Fact]
     public async Task Health_is_ok_without_auth()
     {

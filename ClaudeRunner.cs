@@ -16,6 +16,9 @@ public sealed class ClaudeRunnerOptions
     /// <summary>Per-request wall-clock timeout.</summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>Combined stdout/stderr budget and separate final-answer budget, in bytes.</summary>
+    public int MaxOutputBytes { get; init; } = 8 * 1024 * 1024;
+
     /// <summary>Optional HOME override so auth (~/.claude) resolves in containers. Null = inherit.</summary>
     public string? HomeDir { get; init; }
 
@@ -449,8 +452,9 @@ public sealed class ClaudeRunner : IAgentRunner
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_opts.Timeout);
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-        var stderrTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+        var capture = new ProviderOutput(_opts.MaxOutputBytes, timeoutCts);
+        var stdoutTask = capture.ReadAsync(proc.StandardOutput.BaseStream);
+        var stderrTask = capture.ReadAsync(proc.StandardError.BaseStream);
         string raw;
         string stderr;
         try
@@ -474,9 +478,7 @@ public sealed class ClaudeRunner : IAgentRunner
             TryKill(proc);
             if (!await ProviderProcess.ObserveOutputAsync(proc, stdoutTask, stderrTask))
                 _log.LogWarning("claude output cleanup exceeded its deadline");
-            return !ct.IsCancellationRequested
-                ? new ClaudeProcessRun(new CodexResult(false, "", "timeout", $"Claude timed out after {_opts.Timeout.TotalSeconds:F0}s."), null, null, null)
-                : new ClaudeProcessRun(new CodexResult(false, "", "cancelled", "Request was cancelled."), null, null, null);
+            return new ClaudeProcessRun(capture.CancelledResult(ct, "Claude", _opts.Timeout), null, null, null);
         }
 
         var sessionId = TryParseSessionId(raw);

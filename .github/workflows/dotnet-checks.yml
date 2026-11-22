@@ -3,31 +3,15 @@ name: Affected bridge checks
 on:
   push:
     paths:
-      - 'CodexRunner.cs'
-      - 'ClaudeRunner.cs'
-      - 'ProviderProcess.cs'
-      - 'Program.cs'
-      - 'ResponsesApi.cs'
-      - 'ServiceSecurity.cs'
-      - 'ChatModels.cs'
-      - 'ProviderUsage.cs'
-      - 'CodexSandboxProbe.cs'
-      - 'appsettings.json'
+      - '**/*.cs'
       - '**/*.csproj'
-      - 'tests/RunnerProcessTests.cs'
-      - 'tests/CodexRunnerSessionTests.cs'
-      - 'tests/ClaudeRunnerSessionTests.cs'
-      - 'tests/ClaudeRunnerAuthReseedTests.cs'
-      - 'tests/ClaudeWeeklyQuotaTests.cs'
-      - 'tests/CodexCapacityTests.cs'
-      - 'tests/ResponsesApiTests.cs'
-      - 'tests/ChatEndpointTests.cs'
-      - '**/Directory.Build.*'
-      - '**/Directory.Packages.*'
+      - 'appsettings.json'
+      - '**/Directory.*'
       - '**/NuGet.Config'
       - '**/nuget.config'
       - '**/packages.lock.json'
       - 'global.json'
+      - 'scripts/affected-dotnet*.mjs'
       - '.github/workflows/dotnet-checks.yml'
 
 permissions:
@@ -41,30 +25,45 @@ jobs:
   affected-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      TEST_FILTER: FullyQualifiedName~RunnerProcessTests|FullyQualifiedName~CodexRunnerSessionTests|FullyQualifiedName~ClaudeRunnerSessionTests|FullyQualifiedName~ClaudeRunnerAuthReseedTests|FullyQualifiedName~ClaudeWeeklyQuotaTests|FullyQualifiedName~CodexCapacityTests|FullyQualifiedName~ResponsesApiTests|FullyQualifiedName~ChatEndpointTests.Responses_|FullyQualifiedName~ChatEndpointTests.Route_variants_require_valid_token
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select changed consumers
+        id: selection
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/affected-dotnet.mjs "$BEFORE_SHA" "$GITHUB_SHA"
+      - name: Check changed affected-test selector
+        if: steps.selection.outputs.selector_changed == 'true'
+        run: node --test scripts/affected-dotnet.test.mjs
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
       - name: Record selected source and execution configuration
+        if: steps.selection.outputs.skip != 'true'
         run: |
           mkdir -p test-results
           {
             git rev-parse HEAD
             dotnet --info
+            node --version
             printf 'Selection: %s\n' "$TEST_FILTER"
             printf '%s\n' 'Reason: relevant source, fixtures, dependencies or workflow changed in this push.'
-            git ls-files -z -- '*.cs' '*.csproj' '*.props' '*.targets' 'global.json' '*NuGet.Config' '*nuget.config' '*packages.lock.json' 'appsettings.json' '.github/workflows/dotnet-checks.yml' | xargs -0 sha256sum
+            git ls-files -z -- '*.cs' '*.csproj' '*.props' '*.targets' 'global.json' '*NuGet.Config' '*nuget.config' '*packages.lock.json' 'appsettings.json' 'scripts/affected-dotnet*.mjs' '.github/workflows/dotnet-checks.yml' | xargs -0 sha256sum
           } > test-results/source-and-command.txt
-      - run: dotnet restore tests/AiMcpContainers.Tests.csproj
-      - name: Run only the affected runner and Responses consumers
+      - if: steps.selection.outputs.skip != 'true'
+        run: dotnet restore tests/AiMcpContainers.Tests.csproj
+      - name: Run only affected consumers
+        if: steps.selection.outputs.skip != 'true'
         run: |
           printf '%s\n' 'dotnet test tests/AiMcpContainers.Tests.csproj --no-restore --filter "$TEST_FILTER" --logger "trx;LogFileName=affected.trx" --results-directory test-results' >> test-results/source-and-command.txt
           dotnet test tests/AiMcpContainers.Tests.csproj --no-restore --filter "$TEST_FILTER" --logger 'trx;LogFileName=affected.trx' --results-directory test-results
       - name: Require executed tests and hash the result
-        if: always()
+        if: always() && steps.selection.outcome == 'success' && steps.selection.outputs.skip != 'true'
         run: |
           python3 - <<'PY'
           import hashlib, pathlib, xml.etree.ElementTree as ET

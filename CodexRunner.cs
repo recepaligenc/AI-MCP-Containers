@@ -48,6 +48,9 @@ public sealed class CodexRunnerOptions
     /// <summary>Per-request wall-clock timeout.</summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>Combined stdout/stderr budget and separate final-answer budget, in bytes.</summary>
+    public int MaxOutputBytes { get; init; } = 8 * 1024 * 1024;
+
     /// <summary>Working directory used when a request omits one.</summary>
     public required string DefaultCwd { get; init; }
 
@@ -361,8 +364,9 @@ public sealed class CodexRunner : IAgentRunner
         // The deadline covers stdin, process exit and both output pipes.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_opts.Timeout);
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-        var stderrTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+        var capture = new ProviderOutput(_opts.MaxOutputBytes, timeoutCts);
+        var stdoutTask = capture.ReadAsync(proc.StandardOutput.BaseStream);
+        var stderrTask = capture.ReadAsync(proc.StandardError.BaseStream);
         string stdout;
         string stderr;
         try
@@ -388,9 +392,7 @@ public sealed class CodexRunner : IAgentRunner
             if (!await ProviderProcess.ObserveOutputAsync(proc, stdoutTask, stderrTask))
                 _log.LogWarning("codex output cleanup exceeded its deadline");
             TryDelete(lastMsgFile);
-            return !ct.IsCancellationRequested
-                ? new ProcessRun(new CodexResult(false, "", "timeout", $"Codex timed out after {_opts.Timeout.TotalSeconds:F0}s."), null, null, null)
-                : new ProcessRun(new CodexResult(false, "", "cancelled", "Request was cancelled."), null, null, null);
+            return new ProcessRun(capture.CancelledResult(ct, "Codex", _opts.Timeout), null, null, null);
         }
 
         var threadId = captureSession ? TryParseThreadIdFromJsonEvents(stdout) : null;
@@ -416,9 +418,18 @@ public sealed class CodexRunner : IAgentRunner
         string answer;
         try
         {
-            answer = File.Exists(lastMsgFile)
-                ? (await File.ReadAllTextAsync(lastMsgFile, ct)).TrimEnd('\n', '\r')
-                : "";
+            if (File.Exists(lastMsgFile))
+            {
+                await using var file = new FileStream(lastMsgFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                    4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                var finalCapture = new ProviderOutput(_opts.MaxOutputBytes, timeoutCts);
+                try { answer = (await finalCapture.ReadAsync(file)).TrimEnd('\n', '\r'); }
+                catch (OperationCanceledException)
+                {
+                    return new ProcessRun(finalCapture.CancelledResult(ct, "Codex", _opts.Timeout), null, null, null);
+                }
+            }
+            else answer = "";
         }
         finally
         {
@@ -571,7 +582,7 @@ public sealed class CodexRunner : IAgentRunner
             false,
             "",
             "rate_limited",
-            $"Codex usage limit reached. Retry after {until:yyyy-MM-dd HH:mm:ss} UTC.");
+            $"Codex usage limit reached. Retry after {until:yyyy-MM-dd HH:mm:ss} UTC.", RetryAtUtc: until);
 
     private bool ShouldRotateSession(CodexSessionState session, out string reason)
     {

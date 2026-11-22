@@ -8,6 +8,59 @@ namespace AiMcpContainers.Tests;
 public class RunnerProcessTests
 {
     [Theory]
+    [InlineData("codex", "stdout")]
+    [InlineData("codex", "stderr")]
+    [InlineData("claude", "stdout")]
+    [InlineData("claude", "stderr")]
+    [InlineData("codex", "combined")]
+    [InlineData("claude", "combined")]
+    public async Task Excess_output_stops_process_and_releases_capacity(string provider, string pipe)
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var output = pipe == "combined" ? "head -c 40000 /dev/zero\nhead -c 40000 /dev/zero >&2"
+            : "head -c 70000 /dev/zero" + (pipe == "stderr" ? " >&2" : "");
+        using var fake = new FakeProvider("echo $$ > parent.pid\n" + output + "\nsleep 30");
+        var runner = new BoundedAgentRunner(fake.Runner(provider, TimeSpan.FromSeconds(4), 65536), 1);
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        var result = await runner.RunAsync("p", null, null, "read-only", null, watchdog.Token);
+        Assert.Equal("output_limit_exceeded", result.ErrorCode);
+        await AssertStopped(fake.Root, "parent.pid");
+        var again = await runner.RunAsync("p", null, null, "read-only", null, watchdog.Token);
+        Assert.Equal("output_limit_exceeded", again.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Oversized_codex_answer_is_bounded_and_deleted()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var fake = new FakeProvider("""
+            while [ "$#" -gt 0 ]; do
+              if [ "$1" = "--output-last-message" ]; then out="$2"; shift 2; else shift; fi
+            done
+            printf '%s' "$out" > answer-path
+            cat > /dev/null
+            head -c 70000 /dev/zero > "$out"
+            """);
+        var result = await fake.Runner("codex", TimeSpan.FromSeconds(4), 65536)
+            .RunAsync("p", null, null, "read-only", null, CancellationToken.None);
+        Assert.Equal("output_limit_exceeded", result.ErrorCode);
+        Assert.False(File.Exists(File.ReadAllText(Path.Combine(fake.Root, "answer-path"))));
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("claude")]
+    public async Task Utf8_output_below_limit_remains_successful(string provider)
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var fake = new FakeProvider("cat > /dev/null\nprintf '{\"result\":\"Türkçe ✓\"}'");
+        var result = await fake.Runner(provider, TimeSpan.FromSeconds(4), 65536)
+            .RunAsync("p", null, null, "read-only", null, CancellationToken.None);
+        Assert.True(result.Ok, result.ErrorCode);
+        if (provider == "claude") Assert.Equal("Türkçe ✓", result.Output);
+    }
+
+    [Theory]
     [InlineData("codex")]
     [InlineData("claude")]
     public async Task Deadline_covers_blocked_stdin_and_releases_capacity(string provider)
@@ -117,11 +170,11 @@ public class RunnerProcessTests
                 File.SetUnixFileMode(Binary, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
-        public IAgentRunner Runner(string provider, TimeSpan timeout) => provider == "codex"
+        public IAgentRunner Runner(string provider, TimeSpan timeout, int maxOutputBytes = 8 * 1024 * 1024) => provider == "codex"
             ? new CodexRunner(new CodexRunnerOptions { CodexBinary = Binary, CodexHome = Root,
-                DefaultCwd = Root, Timeout = timeout }, new CaptureLogger<CodexRunner>(Messages))
+                DefaultCwd = Root, Timeout = timeout, MaxOutputBytes = maxOutputBytes }, new CaptureLogger<CodexRunner>(Messages))
             : new ClaudeRunner(new ClaudeRunnerOptions { ClaudeBinary = Binary, HomeDir = Root,
-                DefaultCwd = Root, Timeout = timeout }, new CaptureLogger<ClaudeRunner>(Messages));
+                DefaultCwd = Root, Timeout = timeout, MaxOutputBytes = maxOutputBytes }, new CaptureLogger<ClaudeRunner>(Messages));
 
         public void Dispose() => Directory.Delete(Root, recursive: true);
     }

@@ -50,13 +50,18 @@ test('explicit Override updates managed policy, preserves owner text and creates
   const root = await fixture(t);
   await fs.writeFile(join(root, 'AGENTS.md'), 'Owner instructions.\n');
   await installRules({ ...options, project: root });
+  const legacyAgents = 'Owner instructions.\n' + wrap('Read and follow ".ai-mcp/collaboration.md" before planning or implementing technical work. This owner-controlled policy also governs delegated agents.');
+  await fs.writeFile(join(root, 'AGENTS.md'), legacyAgents);
   const result = await installRules({ ...options, project: root, existing: 'override', template: wrap('# New owner policy') });
   assert.equal(await fs.readFile(result.canonical, 'utf8'), wrap('# New owner policy'));
   assert.match(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), /^Owner instructions\./);
+  assert.match(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), /before any technical work, including documentation, code or configuration audits/);
   assert.equal((await fs.stat(result.backup)).mode & 0o777, 0o700);
   const index = JSON.parse(await fs.readFile(join(result.backup, 'index.json'), 'utf8'));
-  assert.equal(index.length, 1);
+  assert.equal(index.length, 2);
   assert.equal(await fs.readFile(join(result.backup, index[0].file), 'utf8'), options.template);
+  const backups = await Promise.all(index.map(item => fs.readFile(join(result.backup, item.file), 'utf8')));
+  assert.ok(backups.includes(legacyAgents));
   assert.equal((await fs.stat(join(result.backup, index[0].file))).mode & 0o777, 0o600);
 });
 
@@ -106,6 +111,13 @@ test('CLI installs the actual template and requires a non-interactive existing-s
   assert.equal(initial.status, 0, initial.stderr);
   const canonical = join(root, '.ai-mcp', 'collaboration.md');
   const before = await fs.readFile(canonical, 'utf8');
+  const template = await fs.readFile(new URL('../../docs/templates/ai-mcp-collaboration.md', import.meta.url), 'utf8');
+  assert.equal(before, template);
+  assert.match(before, /Documentation, code and configuration audits MUST obtain complementary-provider/);
+  assert.match(before, /Critique these audit findings and evidence\./);
+  assert.equal(await fs.readFile(new URL('../../.ai-mcp/collaboration.md', import.meta.url), 'utf8'), template);
+  assert.match(await fs.readFile(join(root, 'AGENTS.md'), 'utf8'), /Read and follow "\.ai-mcp\/collaboration\.md" before any technical work, including documentation, code or configuration audits/);
+  assert.match(await fs.readFile(join(root, 'CLAUDE.md'), 'utf8'), /@\.ai-mcp\/collaboration\.md/);
   const mtime = (await fs.stat(canonical)).mtimeMs;
   const undecided = run([]);
   assert.equal(undecided.status, 1);
@@ -121,6 +133,9 @@ test('Update creates missing structure and leaves matching files, timestamps and
   const root = await fixture(t);
   const first = await installRules({ ...options, project: root, existing: 'update' });
   assert.equal(first.changed.length, 3);
+  const agents = join(root, 'AGENTS.md');
+  const legacyPointer = wrap('Read and follow ".ai-mcp/collaboration.md" before planning or implementing technical work. This owner-controlled policy also governs delegated agents.');
+  await fs.writeFile(agents, legacyPointer);
   const before = await Promise.all(first.changed.map(async path => [path,
     await fs.readFile(path, 'utf8'), await fs.stat(path)]));
   const second = await installRules({ ...options, project: root, existing: 'update', template: wrap('# Different template') });
@@ -133,6 +148,19 @@ test('Update creates missing structure and leaves matching files, timestamps and
     assert.equal(after.mtimeMs, stat.mtimeMs);
     assert.equal(after.ino, stat.ino);
   }
+  assert.equal(await fs.readFile(agents, 'utf8'), legacyPointer);
+});
+
+test('actual template user installation distributes audit policy and audit-aware client references', async t => {
+  const root = await fixture(t);
+  const codexRoot = join(root, 'Codex Config');
+  const claudeRoot = join(root, 'Claude Config');
+  const result = await installRules({ user: true, codexRoot, claudeRoot, log() {} });
+  const template = await fs.readFile(new URL('../../docs/templates/ai-mcp-collaboration.md', import.meta.url), 'utf8');
+  assert.equal(await fs.readFile(result.canonical, 'utf8'), template);
+  const agents = await fs.readFile(join(codexRoot, 'AGENTS.md'), 'utf8');
+  assert.ok(agents.includes(`Read and follow ${JSON.stringify(result.canonical)} before any technical work, including documentation, code or configuration audits`));
+  assert.match(await fs.readFile(join(claudeRoot, 'CLAUDE.md'), 'utf8'), /@\.ai-mcp\/collaboration\.md/);
 });
 
 test('Update repairs missing references while preserving custom policy and backing up appended instructions', async t => {

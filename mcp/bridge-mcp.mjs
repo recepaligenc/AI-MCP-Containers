@@ -199,9 +199,23 @@ async function callBridge(prompt, cwd, sandbox, cancellationSignal) {
 
   if (!res.ok) {
     // Surface the bridge's typed error code/message; never echo auth headers.
-    const code = data?.code || `http_${res.status}`;
-    const message = data?.error || `HTTP ${res.status}`;
-    throw new Error(`bridge error [${code}]: ${message}`);
+    const code = typeof data?.code === 'string' && /^[a-z0-9_]{1,64}$/i.test(data.code)
+      ? data.code : `http_${res.status}`;
+    const message = typeof data?.error === 'string' ? data.error : `HTTP ${res.status}`;
+    const details = { code, httpStatus: res.status };
+    if (typeof data?.retryAtUtc === 'string'
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.retryAtUtc)
+      && Number.isFinite(Date.parse(data.retryAtUtc))) details.retryAtUtc = data.retryAtUtc;
+    if (typeof data?.limitKind === 'string' && /^[a-z0-9_-]{1,64}$/i.test(data.limitKind))
+      details.limitKind = data.limitKind;
+    const retryHeader = res.headers.get('retry-after');
+    if (retryHeader && /^\d+$/.test(retryHeader) && Number.isSafeInteger(Number(retryHeader)))
+      details.retryAfterSeconds = Number(retryHeader);
+    else if (retryHeader && retryHeader.length < 128 && Number.isFinite(Date.parse(retryHeader)))
+      details.retryAfterSeconds = Math.max(0, Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000));
+    const error = new Error(`bridge error [${code}]: ${message}`);
+    error.bridgeDetails = details;
+    throw error;
   }
   if (!data || typeof data.answer !== 'string') {
     throw new Error('bridge returned an unexpected response shape (no "answer" field)');
@@ -310,7 +324,7 @@ async function handle(msg) {
         // Tool-level error → isError content so the model sees it (not a protocol error).
         const usageReceipt = receipt(null);
         reply(id, { isError: true, content: [{ type: 'text', text: e.message }, receiptContent(usageReceipt)],
-          structuredContent: { error: e.message, receipt: usageReceipt } });
+          structuredContent: { error: e.message, ...(e.bridgeDetails ? { errorDetails: e.bridgeDetails } : {}), receipt: usageReceipt } });
       } finally {
         requestControllers.delete(id);
         inFlight--;

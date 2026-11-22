@@ -12,6 +12,12 @@ x-security: &security
   pids_limit: 256
   mem_limit: 2g
   cpus: 2.0
+  healthcheck:
+    test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "3", "http://127.0.0.1:8080/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
   tmpfs:
     - /tmp:rw,nosuid,nodev,size=256m,mode=1777
 
@@ -21,6 +27,7 @@ x-environment: &environment
   AI_MCP_DEFAULT_CWD: ${AI_MCP_PROJECT_ROOT}
   AI_MCP_READ_ONLY_PROJECTS: "true"
   AI_MCP_MAX_CONCURRENT_REQUESTS: ${AI_MCP_MAX_CONCURRENT_REQUESTS:-6}
+  AI_MCP_MAX_OUTPUT_BYTES: ${AI_MCP_MAX_OUTPUT_BYTES:-8388608}
 
 services:
   codex-mcp:

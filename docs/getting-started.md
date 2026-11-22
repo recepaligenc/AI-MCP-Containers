@@ -87,6 +87,11 @@ existing client instruction files. It preserves unrelated instructions, includin
 an active `AGENTS.override.md` and an existing `.claude/CLAUDE.md` layout. No manual
 Markdown copying is required.
 
+Fresh project and user installations include mandatory complementary-provider review
+of documentation, code and configuration audit findings, even when no edits are made
+or no findings are identified. The host must obtain the actual review before reporting
+the audit as complete. This is client guidance, not a server-side enforcement loop.
+
 User scope keeps one canonical policy at
 `<Claude config root>/.ai-mcp/collaboration.md`. Claude imports it relatively; Codex
 receives an absolute file reference. Defaults are `~/.claude` and `~/.codex`, with
@@ -107,6 +112,12 @@ unrelated instruction text and privately backs up changed existing files under
 `.ai-mcp/backups/`. Keep those backups private and out of version control. A backup
 index identifies each original file. The installer refuses ambiguous markers and
 symlinked managed destinations rather than guessing what to replace.
+
+To adopt the audit-review rule in an existing installation, choose **Override** after
+reviewing its effect on your managed policy. **Keep** and **Update** preserve existing
+canonical policy bytes and do not add the new rule to that policy.
+Update also preserves existing managed reference text; Override refreshes it from
+the current installer, including the audit-aware Codex reference.
 
 When a console cannot display an interactive prompt, the first attempt reports the
 existing setup without writing. After **you** choose, rerun with one of:

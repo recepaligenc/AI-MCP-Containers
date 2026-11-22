@@ -54,7 +54,8 @@ public static class ServiceSecurity
 }
 
 /// <summary>A single provider-wide limit, independent of client-selected conversation IDs.</summary>
-public sealed class BoundedAgentRunner(IAgentRunner inner, int maxConcurrency) : IAgentRunner
+public sealed class BoundedAgentRunner(IAgentRunner inner, int maxConcurrency,
+    ProviderHealth? health = null, string? provider = null) : IAgentRunner
 {
     private readonly SemaphoreSlim _slots = new(Math.Max(1, maxConcurrency));
 
@@ -63,8 +64,13 @@ public sealed class BoundedAgentRunner(IAgentRunner inner, int maxConcurrency) :
     {
         if (!await _slots.WaitAsync(0, ct))
             return new CodexResult(false, "", "bridge_busy", "The service is busy. Retry later.");
-        try { return await inner.RunAsync(ServiceSecurity.ProjectReadInstructions + "\n" + prompt,
-            cwd, model, sandbox, conversationId, ct); }
+        try
+        {
+            var result = await inner.RunAsync(ServiceSecurity.ProjectReadInstructions + "\n" + prompt,
+                cwd, model, sandbox, conversationId, ct);
+            if (provider is not null) health?.Observe(provider, result);
+            return result;
+        }
         finally { _slots.Release(); }
     }
 }

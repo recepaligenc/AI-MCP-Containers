@@ -106,7 +106,7 @@ export async function installRules({ project, user = false, codexRoot, claudeRoo
     const before = await snapshot(item.path);
     const policyPath = user ? canonical : '.ai-mcp/collaboration.md';
     const body = item.kind === 'codex'
-      ? `Read and follow ${JSON.stringify(policyPath)} before planning or implementing technical work. This owner-controlled policy also governs delegated agents.`
+      ? `Read and follow ${JSON.stringify(policyPath)} before any technical work, including documentation, code or configuration audits, planning, or implementation. This owner-controlled policy also governs delegated agents.`
       : `@${relative(dirname(item.path), canonical).split(sep).join('/').replace(/\s/g, '\\$&')}`;
     candidates.push({ ...item, body, text: pointer(before?.text ?? '', body, item.path), before });
   }
@@ -196,6 +196,7 @@ Existing AI-MCP setup always prompts Keep / Update / Override; Keep is the defau
 Non-interactive sessions must explicitly pass --existing keep|update|override when setup exists.
 Update adds missing files/references and preserves existing canonical policy bytes; conflicts stop before writes.
 Update does not merge new rule clauses into a customized existing policy.
+Update preserves existing managed reference text; Override refreshes it from the current installer.
 An AI may pass --existing override only after the owner explicitly chooses Override.
 Override backs up changed existing files and preserves unrelated instruction text.
 User scope respects CODEX_HOME and CLAUDE_CONFIG_DIR. Both clients need access to the shared policy.

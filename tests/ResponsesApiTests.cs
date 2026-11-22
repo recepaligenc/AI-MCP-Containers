@@ -6,6 +6,17 @@ namespace AiMcpContainers.Tests;
 
 public class ResponsesApiTests
 {
+    [Fact]
+    public void Separate_responses_have_unique_identifiers()
+    {
+        var first = JsonSerializer.SerializeToElement(ResponsesApi.BuildResponse("a", "model", "codex"));
+        var second = JsonSerializer.SerializeToElement(ResponsesApi.BuildResponse("b", "model", "codex"));
+        var id = first.GetProperty("id").GetString();
+        Assert.Matches("^resp_[0-9a-f]{32}$", id!);
+        Assert.NotEqual(id, second.GetProperty("id").GetString());
+        Assert.Equal(id, first.GetProperty("id").GetString());
+    }
+
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
     // ---- BuildPrompt ----

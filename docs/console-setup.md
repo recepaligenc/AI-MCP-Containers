@@ -96,8 +96,14 @@ The [shared template](templates/ai-mcp-collaboration.md) directs the coordinatin
 client to obtain a complementary agent's plan review before implementation and a
 review of the final changes and test evidence before completion. This is mandatory
 for technical implementation plans, application code, runtime configuration, security
-behavior, UI and tests. Factual lookups without implementation plans and spelling/
-formatting-only edits are exempt; changes to rendered UI retain applicable UI checks.
+behavior, UI and tests. Documentation, code and configuration audits require review
+of the final findings, even without edits or with no findings. The host sends the
+scope, inspected artifacts, methods, evidence and limitations with
+"Critique these audit findings and evidence." Audit-only work uses this review in
+place of the plan and implementation stages; substantive fix proposals or edits use the
+existing plan and implementation gates. Direct factual lookups without evaluation
+and spelling/formatting-only edits are otherwise exempt; audits are not. Changes to
+rendered UI retain applicable UI checks.
 
 Claude-led work uses Codex as the reviewer; Codex-led work uses Claude. The client
 revises and resubmits concrete changes until acceptance criteria and review evidence
@@ -155,7 +161,7 @@ The managed part of root `AGENTS.md` can be:
 
 ```markdown
 <!-- BEGIN AI-MCP COLLABORATION -->
-Read and follow `.ai-mcp/collaboration.md` for this project's collaboration workflow.
+Read and follow ".ai-mcp/collaboration.md" before any technical work, including documentation, code or configuration audits, planning, or implementation. This owner-controlled policy also governs delegated agents.
 <!-- END AI-MCP COLLABORATION -->
 ```
 

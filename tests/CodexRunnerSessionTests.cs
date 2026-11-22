@@ -211,6 +211,9 @@ public class CodexRunnerSessionTests
         Assert.False(first.Ok);
         Assert.False(second.Ok);
         Assert.Equal("rate_limited", first.ErrorCode);
+        Assert.NotNull(first.RetryAtUtc);
+        Assert.True(first.RetryAtUtc > DateTimeOffset.UtcNow);
+        Assert.Equal(first.RetryAtUtc, second.RetryAtUtc);
         Assert.Null(first.Usage);
         Assert.Equal("rate_limited", second.ErrorCode);
 

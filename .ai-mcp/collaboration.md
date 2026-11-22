@@ -14,9 +14,17 @@ client MUST obtain a substantive review from the complementary provider: use
 `ask_claude` for Codex-led work and `ask_codex` for Claude Code-led work, through
 `ai_mcp_claude` and `ai_mcp_codex` respectively.
 
-Factual lookup questions that do not produce implementation plans, and changes limited
-to spelling or formatting, are exempt. Do not classify implementation planning or a
-behavioral change as trivial to bypass this rule.
+Documentation, code and configuration audits MUST obtain complementary-provider
+review of their final findings before being reported as complete, even when no
+implementation changes are made or no findings are identified. An audit evaluates
+artifacts for defects, omissions, inconsistencies or risks; it is not a direct
+factual lookup. This requirement takes precedence over the factual-lookup and
+spelling/formatting exemptions when an audit is requested.
+
+Direct factual lookups that only retrieve a stated value or location without judging
+correctness or completeness, and changes limited to spelling or formatting, are
+otherwise exempt. Do not classify implementation planning, an audit or a behavioral
+change as trivial to bypass this rule.
 An edit that changes rendered UI remains subject to the applicable UI checks below.
 
 If you are answering a delegated provider/review request, perform that bounded task
@@ -155,6 +163,30 @@ be recovered, report the uncertainty rather than silently starting a new allowan
 Persist a redacted record only to an authorized local location when necessary; do not
 publish raw review transcripts or secrets.
 
+## Audit findings review
+
+For audit-only work, prepare an evidence-backed draft describing the requested scope,
+files or artifacts inspected, methods used, findings with source references and
+limitations. Send it to the complementary provider with
+"Critique these audit findings and evidence." Ask for READY, CHANGES_REQUIRED or
+BLOCKED, supported by severity, evidence and proposed corrections where relevant.
+For a no-findings audit, the reviewer must assess coverage and explicitly address
+coverage gaps; an empty finding list alone does not justify READY.
+
+Assess the critique against the artifacts, resolve supported findings and record
+dispositions. Obtain substantive review covering the final findings and evidence;
+material revisions require targeted follow-up review. A superficial endorsement or
+unsupported READY does not satisfy this gate. Report review results, request count
+and remaining limitations without claiming unperformed tests passed.
+
+This audit critique replaces the plan and implementation critique stages only when
+the task remains an audit without technical implementation plans, substantive fix
+proposals or edits. If the task expands into those activities, apply the existing
+plan and implementation gates below. Audit requests count toward the same 20-request
+task budget. Evidence reuse, failure handling and explicit task-specific waivers
+still apply. Delegated provider/review assignments remain bounded by the no-recursion
+rule above; reviewers do not initiate another collaboration workflow.
+
 ## Plan, implement, review and iterate
 
 1. Build a concrete plan from the task contract and project constraints. Every
@@ -193,13 +225,15 @@ publish raw review transcripts or secrets.
 
 Tool registration, a connection check, an attempted request and self-review do NOT
 satisfy peer review. An actual complementary-provider response covering the relevant
-plan or changes is required. Reuse a prior review only when the reviewed artifact,
+plan, changes or audit findings is required. Reuse a prior review only when the reviewed artifact,
 relevant context and requirements are unchanged and its evidence remains available.
 
 Do not declare a covered task complete while a required review is missing. Only an
 explicit user waiver for the current task may bypass that review; record the waived
 stage and do not present it as reviewed. For planning-only tasks, the implementation
 review is not applicable because no implementation was performed.
+For audit-only tasks, the audit findings review above is required; plan and
+implementation reviews are not applicable while the task remains audit-only.
 
 Stop the loop when the 20-request budget is exhausted, necessary information is
 missing, or the same material disagreement persists through two consecutive reviews

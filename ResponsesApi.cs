@@ -152,7 +152,7 @@ public static class ResponsesApi
     /// <summary>Native usage is optional; subscription credits cannot be inferred from tokens.</summary>
     public static object BuildResponse(string answer, string model, string provider, ProviderUsage? providerUsage = null) => new
     {
-        id = "resp_bridge",
+        id = $"resp_{Guid.NewGuid():N}",
         @object = "response",
         model,
         provider,

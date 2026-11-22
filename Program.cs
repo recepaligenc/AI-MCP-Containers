@@ -140,6 +140,11 @@ if (readOnlyProjects && (defaultSandbox == "workspace-write" || allowedWriteRoot
 if (!Directory.Exists(defaultCwd) || !ChatRequestValidator.IsWithinAllowedRoot(defaultCwd, allowedRoots))
     throw new InvalidOperationException("AI_MCP_DEFAULT_CWD must be an existing directory inside AI_MCP_ALLOWED_ROOTS.");
 
+int maxOutputBytes = 8 * 1024 * 1024;
+if (cfg["AI_MCP_MAX_OUTPUT_BYTES"] is { } outputLimit
+    && (!int.TryParse(outputLimit, out maxOutputBytes) || maxOutputBytes < 64 * 1024 || maxOutputBytes > 64 * 1024 * 1024))
+    throw new InvalidOperationException("AI_MCP_MAX_OUTPUT_BYTES must be between 65536 and 67108864.");
+
 var timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
 // Client-requested read-only / workspace-write need codex's own sandbox. Measure once, with codex itself,
@@ -150,6 +155,7 @@ var codexInnerSandbox = codexAvailable
     : null;
 
 // Register one runner per available CLI; the registry routes each request to the right one.
+builder.Services.AddSingleton<ProviderHealth>();
 builder.Services.AddSingleton<IAgentRunnerRegistry>(sp =>
 {
     var lf = sp.GetRequiredService<ILoggerFactory>();
@@ -163,6 +169,7 @@ builder.Services.AddSingleton<IAgentRunnerRegistry>(sp =>
                 CodexHome = codexHome,
                 DefaultCwd = defaultCwd,
                 Timeout = timeout,
+                MaxOutputBytes = maxOutputBytes,
                 ReuseSession = reuseCodexSession,
                 SessionPoolSize = codexSessionPoolSize,
                 Ephemeral = codexEphemeral,
@@ -183,6 +190,7 @@ builder.Services.AddSingleton<IAgentRunnerRegistry>(sp =>
                 ClaudeBinary = claudeBin!,
                 DefaultCwd = defaultCwd,
                 Timeout = timeout,
+                MaxOutputBytes = maxOutputBytes,
                 HomeDir = claudeHome,
                 ReuseSession = reuseClaudeSession,
                 SessionPoolSize = claudeSessionPoolSize,
@@ -198,7 +206,8 @@ builder.Services.AddSingleton<IAgentRunnerRegistry>(sp =>
             lf.CreateLogger<ClaudeRunner>());
     }
     return new AgentRunnerRegistry(map.ToDictionary(pair => pair.Key,
-        pair => (IAgentRunner)new BoundedAgentRunner(pair.Value, maxConcurrency)));
+        pair => (IAgentRunner)new BoundedAgentRunner(pair.Value, maxConcurrency,
+            sp.GetRequiredService<ProviderHealth>(), pair.Key)));
 });
 
 // Default to localhost:8787 only when nothing else picked a binding (ASPNETCORE_URLS,
@@ -262,6 +271,25 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Json(new { status = "ok" }));
+
+// Local prerequisites and recent failures only. No model calls or credential reads.
+// Authentication stays required, and readiness never prevents a recovery request.
+app.MapGet("/ready", (ProviderHealth health) =>
+{
+    var checks = availableProviders.Select(provider =>
+    {
+        var executable = ProviderHealth.ExecutableExists(provider == "codex" ? codexBin : claudeBin);
+        var directory = Directory.Exists(defaultCwd);
+        var sandbox = provider != "codex" || defaultSandbox == "danger-full-access"
+            || codexInnerSandbox?.Available == true;
+        var observation = health.State(provider);
+        return new { provider, executable, directory, sandbox, observation,
+            ready = executable && directory && sandbox && observation is not ("authentication_failed" or "quota_limited") };
+    }).ToArray();
+    var ready = checks.All(check => check.ready);
+    return Results.Json(new { status = ready ? "ready" : "not_ready", verification = "local_and_recent_observations", checks },
+        statusCode: ready ? 200 : 503);
+});
 
 // The token gate protects this route without sending a model prompt.
 app.MapGet("/auth/verify", () => Results.Json(new

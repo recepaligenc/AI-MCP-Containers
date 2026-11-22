@@ -285,6 +285,13 @@ the smallest sufficient durable change and evaluates architectural fit, security
 performance. It finishes early when ready and reports unresolved work rather than
 claiming completion after quota failure, stalled review or exhausted budget.
 
+Documentation, code and configuration audits also require complementary-provider
+review of the final findings, even without edits or when no findings are identified.
+The host sends the scope, inspected artifacts, evidence and limitations with
+"Critique these audit findings and evidence." Audits do not qualify for the factual
+lookup or spelling/formatting exemptions. This is an installed client instruction;
+the services do not enforce the review workflow at runtime.
+
 For UI design or redesign, it requires three visual alternatives and explicit user
 approval before implementation. Visible UI changes require AI inspection of rendered
 views and evidence that affected interactions work, with simple UX and existing fonts
@@ -342,6 +349,32 @@ An image-capable host inspects actual rendered views. The text-only peer reviews
 code, interaction evidence and reported findings; a path or description is not image
 access. Screenshots establish appearance, while functional evidence establishes the
 tested behavior. Reuse unchanged valid evidence and report missing verification.
+
+## Runtime output and readiness
+
+Provider stdout and stderr share an 8 MiB byte budget per process. Codex's final
+answer file has a separate budget of the same size. Oversized output fails with
+`output_limit_exceeded`; it is not silently truncated. Set `AI_MCP_MAX_OUTPUT_BYTES`
+to an integer between 65536 and 67108864 to change the budgets. Invalid values stop
+startup. This bounds captured output, not all provider memory or temporary disk use;
+the Compose memory and tmpfs limits still apply.
+
+`GET /health` remains public HTTP liveness and is the Compose healthcheck target.
+Authenticated `GET /ready` returns 200 or 503 based on local executables, the working
+directory, the configured sandbox, and recent authentication/quota observations.
+It makes no model calls and reads no credentials. `unknown` means remote validity
+has not been established recently; a ready response does not prove remote provider
+reachability or token validity. Typed authentication failures are currently observed
+for Claude; Codex login failures remain generic provider errors and are not classified
+as authentication failures. Authentication observations expire after one minute;
+quota observations expire at their supplied reset time, capped at 15 minutes, or
+one minute when no future reset is known. Successful calls restore readiness;
+readiness never prevents a recovery call.
+
+MCP tool errors retain their human-readable `error` and add `errorDetails` with
+`code`, `httpStatus`, and valid optional `retryAtUtc`, `limitKind`, and
+`retryAfterSeconds` fields. Header and body retry values remain distinct when both
+are supplied. Responses API replies now carry a unique `resp_` identifier per reply.
 
 ## Security layers and limits
 
@@ -441,6 +474,13 @@ rerun a failed check only when a relevant fix or concrete finding justifies it. 
 a [mandatory project rule](.ai-mcp/collaboration.md#mandatory-test-evidence-reuse--owner-2026-11-19).
 Tests of model instructions verify their attachment, not that a model can never ignore them.
 
+The changed-file selector in `scripts/affected-dotnet.mjs` maps production and test
+changes to affected classes, including security, validation, usage and sandbox
+checks. Unmapped C# sources fail CI until a mapping is added. Shared build inputs
+and selector changes select all mapped consumers; unrelated changes select none.
+Push diffs include both names of renames. A new or unavailable base falls back to
+mapping tracked service inputs, never to an empty successful selection.
+
 The focused [bridge CI](.github/workflows/dotnet-checks.yml) and
 [adapter CI](.github/workflows/mcp-checks.yml) run on pushes changing their relevant
 source, fixtures, dependencies or execution configuration. Unrelated documentation
@@ -479,6 +519,11 @@ customized policy. Changed existing instruction files are backed up privately. O
 up changed existing files and preserves unrelated instructions. In a non-interactive
 AI console, the AI must receive your choice before passing `--existing override`.
 User-scope rules do not grant container access to additional projects.
+
+Fresh installations include the mandatory audit-review rule and an audit-aware Codex
+reference. To adopt them in an existing installation, choose **Override** after
+reviewing its effect on your managed policy. **Keep** and **Update** preserve existing
+canonical policy bytes; Update also preserves existing managed reference text.
 
 ### Understand the added review usage
 
