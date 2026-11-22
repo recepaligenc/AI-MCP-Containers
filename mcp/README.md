@@ -9,6 +9,10 @@ registration commands and troubleshooting, see [Connect Claude and Codex as MCP 
 Both clients can call both providers. These are stdio registrations; the provider HTTP
 ports are not direct MCP HTTP endpoints.
 
+For installation driven by a prompt in either console and a shared persistent
+project workflow, see [one-prompt setup](../docs/console-setup.md). The supplied rule
+is a template, not an automatically enabled policy or a runtime enforcement layer.
+
 Configure the MCP launcher with these names:
 
 | Variable | Meaning |

@@ -253,6 +253,19 @@ The examples allow a `1250000` ms adapter HTTP timeout and a larger outer tool t
 | Outer tool timeout | Keep the client deadline longer than the adapter and provider deadlines. |
 | `429` | Inspect the returned error: provider quota/rate limit or service concurrency limit. Re-registering MCP does not reset quotas. |
 
+### Set up from a console prompt and keep the workflow
+
+You can ask either coding client to configure both MCP connections and save the pair
+workflow as a project instruction. Use the [ready-to-paste setup prompt](docs/console-setup.md)
+and [shared collaboration rule template](docs/templates/ai-mcp-collaboration.md).
+The recipe preserves existing settings, uses the private token file, and connects both
+clients to one canonical project rule through `AGENTS.md` and `CLAUDE.md`.
+
+MCP registration is user-scoped; the rule is project-scoped by default. The guide also
+explains an explicit all-projects user rule. Start a new client session after setup.
+These are persistent model instructions, not guaranteed orchestration or a permission
+bypass; the client still owns edits/tests and reports unavailable reviews honestly.
+
 ## Security layers and limits
 
 | Layer | What it enforces |
