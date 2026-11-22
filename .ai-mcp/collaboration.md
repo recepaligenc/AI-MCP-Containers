@@ -29,11 +29,16 @@ defects or require a fixed number of findings. A substantive, supported READY is
 
 ## Agent delegation
 
-The main session coordinates the work and writes code.
-Delegate planning, architecture and costly-to-reverse decisions to planner.
-Delegate tests, lint and build commands to test_runner.
-Delegate file and code search to reader.
-Delegate web and documentation research to researcher.
+The main session coordinates the work and writes code. Delegate each task below to
+the host client's custom agent for that role. Agent names differ by client:
+
+| Task | Codex agent | Claude Code agent |
+| --- | --- | --- |
+| Planning, architecture and costly-to-reverse decisions | `planner` | none; the main session plans |
+| Test, lint and build commands | `test_runner` | `test-runner` |
+| File and code search | `reader` | `reader` |
+| Web and documentation research | `researcher` | `researcher` |
+
 When the relevant custom agent is available, do not perform that task in the main session.
 
 ## Owner-controlled policy
