@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch the VSCode extensions dir; refresh AI-MCP-Containers's codex binary on change
+
+[Path]
+# Fires when entries in the extensions dir change (a new openai.chatgpt-* version
+# appears or the old one is removed during an auto-update). Triggers the .service.
+PathChanged=%h/.vscode/extensions
+Unit=ai-mcp-codex-refresh.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>AI-MCP-Containers</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #d8dce3;
+      --text: #1c2024;
+      --muted: #5b6470;
+      --accent: #10a37f;
+      --accent-press: #0d8a6b;
+      --danger: #c0392b;
+      --danger-bg: #fdecea;
+      --ok-bg: #e8f6f1;
+      --field: #ffffff;
+      --radius: 10px;
+      --focus: #10a37f;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15181c;
+        --panel: #1e2227;
+        --border: #333a42;
+        --text: #e7eaee;
+        --muted: #9aa3ad;
+        --accent: #19c39a;
+        --accent-press: #14a583;
+        --danger: #ff7a6c;
+        --danger-bg: #3a201d;
+        --ok-bg: #14302a;
+        --field: #14171b;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+    header.bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+    label { display: block; font-weight: 600; font-size: 13px; margin: 14px 0 6px; }
+    input[type=text], input[type=password], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      font: inherit;
+      color: var(--text);
+      background: var(--field);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+    }
+    textarea { resize: vertical; min-height: 96px; }
+    input:focus, textarea:focus, select:focus, button:focus-visible {
+      border-color: var(--focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent);
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .row > .col { flex: 1 1 200px; min-width: 0; }
+    button {
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 16px;
+      background: var(--accent);
+      color: #fff;
+      min-height: 42px;
+    }
+    button:hover { background: var(--accent-press); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    button.secondary:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .actions { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+    .grow { flex: 1; }
+    .msg { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 14px; display: none; }
+    .msg.show { display: block; }
+    .msg.err { background: var(--danger-bg); color: var(--danger); }
+    .msg.ok { background: var(--ok-bg); color: var(--accent); }
+    .hidden { display: none !important; }
+    .result {
+      margin-top: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .result-head {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      padding: 8px 12px;
+      background: color-mix(in srgb, var(--text) 5%, transparent);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+    }
+    .result-head b { color: var(--text); font-weight: 600; }
+    pre.answer {
+      margin: 0; padding: 14px;
+      white-space: pre-wrap; word-break: break-word;
+      font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      max-height: 420px; overflow: auto;
+    }
+    .spinner {
+      width: 16px; height: 16px; flex: none;
+      border: 2px solid color-mix(in srgb, var(--text) 25%, transparent);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .who { font-size: 13px; color: var(--muted); }
+    .checkbox { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+    .checkbox input { width: auto; }
+    .checkbox label { margin: 0; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="bar">
+      <div class="brand"><span class="dot" aria-hidden="true"></span> AI-MCP-Containers</div>
+      <div id="sessionBox" class="hidden">
+        <span class="who" id="whoami"></span>
+        <button id="logoutBtn" class="secondary" type="button" style="margin-left:10px;padding:6px 12px;min-height:auto;">Log out</button>
+      </div>
+    </header>
+
+    <!-- ===== LOGIN VIEW ===== -->
+    <main id="loginView" class="panel" aria-labelledby="loginTitle">
+      <h1 id="loginTitle">Sign in</h1>
+      <p class="sub">Enter the bridge access token to start sending prompts to ChatGPT / Codex.</p>
+      <form id="loginForm" autocomplete="off">
+        <label for="token">Access token</label>
+        <input id="token" name="token" type="password" inputmode="text" autocomplete="current-password"
+               placeholder="AI_MCP_TOKEN" aria-describedby="loginMsg" required />
+        <div class="checkbox">
+          <input id="showToken" type="checkbox" />
+          <label for="showToken">Show token</label>
+        </div>
+        <div class="checkbox">
+          <input id="remember" type="checkbox" />
+          <label for="remember">Remember on this device</label>
+        </div>
+        <div class="actions">
+          <button id="loginBtn" type="submit">Sign in</button>
+          <span id="loginSpinner" class="spinner hidden" role="status" aria-label="Verifying"></span>
+        </div>
+        <div id="loginMsg" class="msg" role="alert" aria-live="assertive"></div>
+      </form>
+    </main>
+
+    <!-- ===== APP / TEST VIEW ===== -->
+    <main id="appView" class="panel hidden" aria-labelledby="appTitle">
+      <h1 id="appTitle">Send a test prompt</h1>
+      <p class="sub">Type a prompt and run it through the bridge to confirm the round-trip works.</p>
+      <form id="chatForm">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" name="prompt" placeholder="Reply with exactly: BRIDGE_OK" required>Reply with exactly: BRIDGE_OK</textarea>
+        <div class="row">
+          <div class="col">
+            <label for="provider">Provider</label>
+            <select id="provider" name="provider"></select>
+          </div>
+          <div class="col">
+            <label for="sandbox">Sandbox</label>
+            <select id="sandbox" name="sandbox">
+              <option value="" selected>Service default</option>
+              <option value="read-only">read-only</option>
+            </select>
+          </div>
+        </div>
+        <label for="model">Model <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+        <input id="model" name="model" type="text" placeholder="provider default (e.g. gpt-5.5 / sonnet)" />
+        <div class="actions">
+          <button id="sendBtn" type="submit">Send test request</button>
+          <span id="chatSpinner" class="spinner hidden" role="status" aria-label="Waiting for response"></span>
+          <span class="grow"></span>
+        </div>
+        <div id="chatMsg" class="msg" role="alert" aria-live="assertive"></div>
+      </form>
+
+      <section id="result" class="result hidden" aria-live="polite">
+        <div class="result-head">
+          <span>model: <b id="rModel">—</b></span>
+          <span>sandbox: <b id="rSandbox">—</b></span>
+          <span>took: <b id="rDuration">—</b></span>
+        </div>
+        <pre class="answer" id="rAnswer"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const STORE_KEY = "codexBridgeToken";
+
+    // In-memory token by default; persisted only if the user opts in.
+    let token = sessionStorage.getItem(STORE_KEY) || localStorage.getItem(STORE_KEY) || "";
+
+    function showMsg(el, text, kind) {
+      el.textContent = text;                 // textContent — never innerHTML (XSS-safe)
+      el.className = "msg show " + (kind === "ok" ? "ok" : "err");
+    }
+    function clearMsg(el) { el.textContent = ""; el.className = "msg"; }
+
+    function setView(authed) {
+      $("loginView").classList.toggle("hidden", authed);
+      $("appView").classList.toggle("hidden", !authed);
+      $("sessionBox").classList.toggle("hidden", !authed);
+      if (authed) { $("whoami").textContent = "Signed in"; $("prompt").focus(); }
+      else { $("token").focus(); }
+    }
+
+    function authHeaders(extra) {
+      const h = Object.assign({}, extra || {});
+      if (token) h["Authorization"] = "Bearer " + token;
+      return h;
+    }
+
+    // Returns the parsed verify payload on success (providers, defaults), or null on 401/failure.
+    async function verifyToken(candidate) {
+      const res = await fetch("/auth/verify", { headers: { "Authorization": "Bearer " + candidate } });
+      if (!res.ok) return null;
+      return await res.json().catch(() => ({ providers: ["codex"], defaultProvider: "codex" }));
+    }
+
+    function populateProviders(info) {
+      const sel = $("provider");
+      sel.textContent = "";
+      const list = (info && Array.isArray(info.providers) && info.providers.length) ? info.providers : ["codex"];
+      for (const p of list) {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p === "codex" ? "codex (ChatGPT)" : (p === "claude" ? "claude (Claude)" : p);
+        if (info && p === info.defaultProvider) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      $("sandbox").value = "";
+    }
+
+    // ---- login ----
+    $("showToken").addEventListener("change", (e) => {
+      $("token").type = e.target.checked ? "text" : "password";
+    });
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg($("loginMsg"));
+      const candidate = $("token").value.trim();
+      if (!candidate) { showMsg($("loginMsg"), "Token is required.", "err"); return; }
+
+      $("loginBtn").disabled = true;
+      $("loginSpinner").classList.remove("hidden");
+      try {
+        const info = await verifyToken(candidate);
+        if (!info) { showMsg($("loginMsg"), "Invalid token. Check AI_MCP_TOKEN and try again.", "err"); return; }
+        token = candidate;
+        const store = $("remember").checked ? localStorage : sessionStorage;
+        store.setItem(STORE_KEY, token);
+        (store === localStorage ? sessionStorage : localStorage).removeItem(STORE_KEY);
+        populateProviders(info);
+        setView(true);
+      } catch (err) {
+        showMsg($("loginMsg"), "Could not reach the bridge. Is it running?", "err");
+      } finally {
+        $("loginBtn").disabled = false;
+        $("loginSpinner").classList.add("hidden");
+      }
+    });
+
+    $("logoutBtn").addEventListener("click", () => {
+      token = "";
+      sessionStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(STORE_KEY);
+      $("result").classList.add("hidden");
+      clearMsg($("chatMsg"));
+      setView(false);
+    });
+
+    // ---- test request ----
+    $("chatForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg($("chatMsg"));
+      $("result").classList.add("hidden");
+
+      const body = { prompt: $("prompt").value };
+      const model = $("model").value.trim();
+      if (model) body.model = model;
+      if ($("sandbox").value) body.sandbox = $("sandbox").value;
+      body.provider = $("provider").value;
+
+      $("sendBtn").disabled = true;
+      $("chatSpinner").classList.remove("hidden");
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 401) {
+          showMsg($("chatMsg"), "Session expired. Please sign in again.", "err");
+          setTimeout(() => $("logoutBtn").click(), 900);
+          return;
+        }
+        if (!res.ok) {
+          const code = data && data.code ? " (" + data.code + ")" : "";
+          showMsg($("chatMsg"), (data && data.error ? data.error : "Request failed.") + code, "err");
+          return;
+        }
+
+        $("rModel").textContent = data.model ?? "—";
+        $("rSandbox").textContent = data.sandbox ?? "—";
+        $("rDuration").textContent = (typeof data.durationMs === "number" ? data.durationMs : "—") + " ms";
+        $("rAnswer").textContent = data.answer ?? "";   // textContent — XSS-safe
+        $("result").classList.remove("hidden");
+        showMsg($("chatMsg"), "Success — response received.", "ok");
+      } catch (err) {
+        showMsg($("chatMsg"), "Network error reaching the bridge.", "err");
+      } finally {
+        $("sendBtn").disabled = false;
+        $("chatSpinner").classList.add("hidden");
+      }
+    });
+
+    // ---- boot: if we already hold a token, validate it silently ----
+    (async () => {
+      if (token) {
+        try {
+          const info = await verifyToken(token);
+          if (info) { populateProviders(info); setView(true); return; }
+        } catch (_) { /* fall through to login */ }
+        token = "";
+        sessionStorage.removeItem(STORE_KEY);
+        localStorage.removeItem(STORE_KEY);
+      }
+      setView(false);
+    })();
+  </script>
+</body>
+</html>

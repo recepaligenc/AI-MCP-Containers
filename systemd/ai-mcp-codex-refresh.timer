@@ -1,0 +1,14 @@
+[Unit]
+Description=Backstop: periodically ensure AI-MCP-Containers's codex binary matches the newest extension
+
+[Timer]
+# The .path unit reacts instantly to most updates; this timer is the safety net for
+# the inotify-on-parent-dir edge cases (e.g. the new codex lands inside the new
+# version subdir without re-touching the watched parent). An unchanged run is a cheap
+# rsync stat-only no-op, so a tight-ish cadence is fine.
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

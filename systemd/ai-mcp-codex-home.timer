@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep VS Code and Codex bridge attached to the same Codex home
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=ai-mcp-codex-home.service
+
+[Install]
+WantedBy=timers.target

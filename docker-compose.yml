@@ -1,0 +1,138 @@
+name: ai-mcp-containers
+
+# Exactly two global provider services. Users choose the host paths in .env.
+# The selected tree is read-only. A parent directory exposes all its descendants.
+x-security: &security
+  restart: unless-stopped
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  pids_limit: 256
+  mem_limit: 2g
+  cpus: 2.0
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+
+x-environment: &environment
+  AI_MCP_TOKEN: ${AI_MCP_TOKEN:?generate AI_MCP_TOKEN in .env}
+  AI_MCP_ALLOWED_ROOTS: ${AI_MCP_PROJECT_ROOT}
+  AI_MCP_DEFAULT_CWD: ${AI_MCP_PROJECT_ROOT}
+  AI_MCP_READ_ONLY_PROJECTS: "true"
+  AI_MCP_MAX_CONCURRENT_REQUESTS: ${AI_MCP_MAX_CONCURRENT_REQUESTS:-6}
+
+services:
+  codex-mcp:
+    <<: *security
+    build: .
+    image: ${AI_MCP_CODEX_IMAGE:-codex-mcp:latest}
+    container_name: codex-mcp
+    user: "${AI_MCP_HOST_UID:-1000}:${AI_MCP_HOST_GID:-1000}"
+    ports:
+      - "127.0.0.1:8788:8080"
+    environment:
+      <<: *environment
+      AI_MCP_PROVIDERS: codex
+      AI_MCP_PROVIDER: codex
+      AI_MCP_CODEX_BIN: /opt/codex/codex
+      AI_MCP_CODEX_HOME: ${HOME}/.codex
+      # Project writes are blocked by the Docker mounts. The native inner sandbox
+      # is unavailable on some Docker hosts; this setting does not isolate secrets
+      # from model tools. Only trusted callers may use this deployment.
+      AI_MCP_SANDBOX: danger-full-access
+      # Calls are independent; clients supply any context in the current request.
+      AI_MCP_CODEX_REUSE_SESSION: "false"
+      AI_MCP_CODEX_EPHEMERAL: "true"
+    volumes:
+      - type: bind
+        source: ${AI_MCP_CODEX_EXT_BIN:?set AI_MCP_CODEX_EXT_BIN in .env}
+        target: /opt/codex
+        read_only: true
+        bind:
+          create_host_path: false
+      # A shared directory preserves atomic OAuth refreshes. Never copy rotating
+      # Codex credentials to a second home; host-owned sessions are never pruned.
+      - type: bind
+        source: ${HOME}/.codex
+        target: ${HOME}/.codex
+        bind:
+          create_host_path: false
+    # Compose cannot concatenate YAML sequence aliases. Keep the
+    # user-selected project bind read-only; environment and mount paths use the same keys.
+      - type: bind
+        source: ${AI_MCP_PROJECT_ROOT}
+        target: ${AI_MCP_PROJECT_ROOT}
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      ai-mcp-shared:
+        aliases: [codex-bridge]
+
+  claude-mcp:
+    <<: *security
+    build: .
+    image: ${AI_MCP_CLAUDE_IMAGE:-claude-mcp:latest}
+    container_name: claude-mcp
+    # Bootstrap repairs only the private runtime volume, then permanently drops
+    # privileges. The application and provider CLI never run as root.
+    cap_add: [CHOWN, DAC_OVERRIDE, SETUID, SETGID]
+    ports:
+      - "127.0.0.1:8789:8080"
+    environment:
+      <<: *environment
+      AI_MCP_PROVIDERS: claude
+      AI_MCP_PROVIDER: claude
+      AI_MCP_CLAUDE_BIN: /usr/bin/claude
+      AI_MCP_CLAUDE_HOME: /claudehome
+      AI_MCP_CLAUDE_EXTENSIONS: /vscode-extensions
+      AI_MCP_HOST_UID: ${AI_MCP_HOST_UID:-1000}
+      AI_MCP_HOST_GID: ${AI_MCP_HOST_GID:-1000}
+      CLAUDE_CODE_TMPDIR: /claudehome/tmp
+      AI_MCP_TIMEOUT_SECONDS: "1200"
+      AI_MCP_SANDBOX: read-only
+      AI_MCP_CLAUDE_REUSE_SESSION: "false"
+      AI_MCP_CLAUDE_NO_SESSION_PERSISTENCE: "true"
+      AI_MCP_CLAUDE_CREDENTIAL_SEED: /seed/.credentials.json
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /claudehome/.claude /claudehome/tmp
+        chown -R "$$AI_MCP_HOST_UID:$$AI_MCP_HOST_GID" /claudehome
+        if [ -f /seed/.credentials.json ]; then
+          setpriv --reuid="$$AI_MCP_HOST_UID" --regid="$$AI_MCP_HOST_GID" --clear-groups install -m 600 /seed/.credentials.json /claudehome/.claude/.credentials.json
+        fi
+        exec setpriv --reuid="$$AI_MCP_HOST_UID" --regid="$$AI_MCP_HOST_GID" --clear-groups dotnet AiMcpContainers.dll
+    volumes:
+      - claude-home:/claudehome
+      - type: bind
+        source: ${AI_MCP_CLAUDE_EXTENSIONS:?set AI_MCP_CLAUDE_EXTENSIONS in .env}
+        target: /vscode-extensions
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOME}/.claude
+        target: /seed
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AI_MCP_PROJECT_ROOT}
+        target: ${AI_MCP_PROJECT_ROOT}
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      ai-mcp-shared:
+        aliases: [claude-bridge]
+
+volumes:
+  claude-home:
+
+networks:
+  ai-mcp-shared:
+    name: ai-mcp-shared
+    external: true

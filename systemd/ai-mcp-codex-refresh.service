@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync newest VSCode ChatGPT codex binary into the AI-MCP-Containers stable copy
+Documentation=file://@AI_MCP_DIRECTORY@/refresh-codex-bin.sh
+
+[Service]
+Type=oneshot
+# systemd user units start with a minimal PATH; make sure rsync/stat/docker resolve.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Let an in-progress extension extraction settle before we read "the newest codex".
+ExecStartPre=/bin/sleep 10
+ExecStart="@AI_MCP_DIRECTORY@/refresh-codex-bin.sh"

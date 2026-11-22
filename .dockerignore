@@ -1,0 +1,23 @@
+bin/
+obj/
+tests/bin/
+tests/obj/
+*.user
+.vs/
+.idea/
+
+# Keep repository history and local credentials out of every build stage.
+.git/
+**/.env
+**/.env.*
+!.env.example
+**/.codex/
+**/.claude/
+**/auth.json
+**/credentials.json
+**/*.pem
+**/*.key
+**/*.bak-*
+docker-compose.override.yml
+**/node_modules/
+ui-tests/shots/

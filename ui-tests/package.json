@@ -1,0 +1,9 @@
+{
+  "name": "codex-bridge-ui-tests",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained Playwright smoke test for the Codex Bridge login + chat UI.",
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}
