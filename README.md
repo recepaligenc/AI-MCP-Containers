@@ -400,9 +400,7 @@ Application names are `AiMcpContainers` and `AiMcp`; active environment names us
 `AI_MCP_*`. Provider-native `CODEX_HOME`, `HOME` and `CLAUDE_CODE_TMPDIR` retain their
 native meanings. The MCP adapter temporarily accepts deprecated client launcher aliases.
 
-The canonical shared network is `ai-mcp-shared`. An existing installation can retain
-`codex-shared` temporarily through an ignored local override while other projects
-migrate their own client configuration. Do not remove a network with active consumers.
+The shared network is `ai-mcp-shared`.
 
 Reuse passing test evidence when sources and execution inputs are unchanged. Run new
 and directly affected checks; image builds do not automatically rerun the test suite.
@@ -431,7 +429,10 @@ node scripts/install-rules.mjs --project /absolute/path/to/your/project
 node scripts/install-rules.mjs --user
 ```
 
-Existing setup always asks **Keep / Override**, defaulting to Keep. Override backs
+Existing setup always asks **Keep / Update / Override**, defaulting to Keep. Update
+adds missing files and references while preserving existing policy text; conflicting
+managed references stop before writes. It does not merge new rule clauses into a
+customized policy. Changed existing instruction files are backed up privately. Override backs
 up changed existing files and preserves unrelated instructions. In a non-interactive
 AI console, the AI must receive your choice before passing `--existing override`.
 User-scope rules do not grant container access to additional projects.

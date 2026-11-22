@@ -41,10 +41,13 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
 3. Run the deterministic rule installer from the checkout:
    node scripts/install-rules.mjs --project /absolute/path/to/target/project
    Use the target root discovered above. Do not manually copy Markdown files.
-   If AI-MCP setup already exists, show its warning and ask me Keep or Override;
+   If AI-MCP setup already exists, show its warning and ask me Keep, Update or Override;
    Keep is the default and must make no changes. In a non-interactive console,
-   rerun with --existing keep or --existing override only after I answer. Never
-   select Override on my behalf. Override backs up changed existing files and
+   rerun with --existing keep, --existing update or --existing override only after I answer. Never
+   select Override on my behalf. Update adds missing files/references and preserves
+   existing policy bytes; conflicting references stop before writes. Update does
+   not merge new clauses into customized policy. Changed existing instructions are
+   backed up privately. Override backs up changed existing files and
    preserves unrelated instructions. Do not weaken the policy during installation.
 4. For rules across my native clients' projects, use --user only if I choose that
    scope. It installs one canonical policy in the Claude config root and references
@@ -137,7 +140,7 @@ This repository activates the rule for its own future sessions through root
 `AGENTS.md`, root `CLAUDE.md` and [the canonical policy](../.ai-mcp/collaboration.md).
 The [template](templates/ai-mcp-collaboration.md) matches that policy. Other projects
 receive it through the automatic installer, or use one user-level policy across projects.
-See the [step-by-step installation guide](getting-started.md) for setup and Keep/Override choices.
+See the [step-by-step installation guide](getting-started.md) for setup and Keep/Update/Override choices.
 
 Typical project layout:
 

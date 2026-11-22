@@ -254,10 +254,12 @@ native client evidence is available. Current subscription-credit totals remain
 unavailable. Do not claim bridge receipts cover the whole task or account.
 
 Use the deterministic rule installer instead of manually copying policy files.
-When it finds existing setup, ask the owner to choose Keep or Override. An AI must
+When it finds existing setup, ask the owner to choose Keep, Update or Override. An AI must
 not select `--existing override` until the owner explicitly answers Override. Keep
-preserves every file; Override updates managed content with private backups and
-preserves unrelated instructions. These installation choices do not authorize
+preserves every file. Update adds missing files/references while retaining existing
+canonical policy bytes; it does not merge new clauses into customized rules.
+Conflicting managed references stop before writes. Override updates managed content
+with private backups and preserves unrelated instructions. These installation choices do not authorize
 weakening this policy or changing project access permissions.
 
 <!-- END AI-MCP COLLABORATION -->

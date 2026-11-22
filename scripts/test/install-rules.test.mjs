@@ -116,3 +116,74 @@ test('CLI installs the actual template and requires a non-interactive existing-s
   assert.equal(await fs.readFile(canonical, 'utf8'), before);
   assert.equal((await fs.stat(canonical)).mtimeMs, mtime);
 });
+
+test('Update creates missing structure and leaves matching files, timestamps and inodes unchanged', async t => {
+  const root = await fixture(t);
+  const first = await installRules({ ...options, project: root, existing: 'update' });
+  assert.equal(first.changed.length, 3);
+  const before = await Promise.all(first.changed.map(async path => [path,
+    await fs.readFile(path, 'utf8'), await fs.stat(path)]));
+  const second = await installRules({ ...options, project: root, existing: 'update', template: wrap('# Different template') });
+  assert.equal(second.policyPreserved, true);
+  assert.deepEqual(second.changed, []);
+  assert.equal(second.backup, undefined);
+  for (const [path, content, stat] of before) {
+    assert.equal(await fs.readFile(path, 'utf8'), content);
+    const after = await fs.stat(path);
+    assert.equal(after.mtimeMs, stat.mtimeMs);
+    assert.equal(after.ino, stat.ino);
+  }
+});
+
+test('Update repairs missing references while preserving custom policy and backing up appended instructions', async t => {
+  const root = await fixture(t);
+  await fs.mkdir(join(root, '.ai-mcp'));
+  const canonical = join(root, '.ai-mcp', 'collaboration.md');
+  await fs.writeFile(canonical, '# Custom owner policy\n');
+  const stat = await fs.stat(canonical);
+  await fs.writeFile(join(root, 'AGENTS.md'), 'Owner instruction.\n');
+  await fs.writeFile(join(root, 'AGENTS.override.md'), 'Priority owner instruction.\n');
+  await fs.mkdir(join(root, '.claude'));
+  await fs.writeFile(join(root, '.claude', 'CLAUDE.md'), 'Claude owner instruction.\n');
+  const result = await installRules({ ...options, project: root, existing: 'update' });
+  assert.equal(result.policyPreserved, true);
+  assert.equal(await fs.readFile(canonical, 'utf8'), '# Custom owner policy\n');
+  assert.equal((await fs.stat(canonical)).mtimeMs, stat.mtimeMs);
+  assert.equal((await fs.stat(canonical)).ino, stat.ino);
+  assert.match(await fs.readFile(join(root, 'AGENTS.override.md'), 'utf8'), /^Priority owner instruction\.[\s\S]*collaboration\.md/);
+  assert.match(await fs.readFile(join(root, '.claude', 'CLAUDE.md'), 'utf8'), /@\.\.\/\.ai-mcp\/collaboration\.md/);
+  const index = JSON.parse(await fs.readFile(join(result.backup, 'index.json'), 'utf8'));
+  assert.equal(index.length, 3);
+  assert.equal((await fs.stat(result.backup)).mode & 0o777, 0o700);
+  for (const item of index) assert.equal((await fs.stat(join(result.backup, item.file))).mode & 0o777, 0o600);
+});
+
+test('Update rejects conflicting or malformed managed references before any writes', async t => {
+  for (const body of ['Read and follow "/another/policy.md" before work.', '@another-policy.md',
+    '```text\n@.ai-mcp/collaboration.md\n```',
+    '<!-- BEGIN AI-MCP COLLABORATION -->\nbroken']) {
+    const root = await fixture(t);
+    const path = join(root, body.includes('@') ? 'CLAUDE.md' : 'AGENTS.md');
+    const original = body.includes('<!--') ? body : wrap(body);
+    await fs.writeFile(path, original);
+    const before = await fs.stat(path);
+    await assert.rejects(installRules({ ...options, project: root, existing: 'update' }), /conflict|Ambiguous/);
+    assert.equal(await fs.readFile(path, 'utf8'), original);
+    assert.equal((await fs.stat(path)).mtimeMs, before.mtimeMs);
+    assert.equal((await fs.stat(path)).ino, before.ino);
+    await assert.rejects(fs.access(join(root, '.ai-mcp')));
+  }
+});
+
+test('CLI Update preserves custom policy and adds missing references without prompting', async t => {
+  const root = await fixture(t);
+  // Project scope exercises the same CLI choice without repurposing user HOME variables.
+  const script = fileURLToPath(new URL('../install-rules.mjs', import.meta.url));
+  await fs.mkdir(join(root, '.ai-mcp'));
+  await fs.writeFile(join(root, '.ai-mcp', 'collaboration.md'), '# Existing custom policy\n');
+  const result = spawnSync(process.execPath, [script, '--project', root, '--existing', 'update'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Existing canonical policy preserved byte-for-byte/);
+  assert.equal(await fs.readFile(join(root, '.ai-mcp', 'collaboration.md'), 'utf8'), '# Existing custom policy\n');
+  assert.match(await fs.readFile(join(root, 'CLAUDE.md'), 'utf8'), /@\.ai-mcp\/collaboration\.md/);
+});

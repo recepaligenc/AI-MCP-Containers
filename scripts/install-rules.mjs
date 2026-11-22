@@ -50,7 +50,7 @@ export async function installRules({ project, user = false, codexRoot, claudeRoo
   existing, interactive = false, choose, log = console.log,
   template = null } = {}) {
   if (Boolean(project) === Boolean(user)) throw new Error('Select exactly one scope: --project PATH or --user.');
-  if (existing !== undefined && !['keep', 'override'].includes(existing)) throw new Error('--existing must be keep or override.');
+  if (existing !== undefined && !['keep', 'update', 'override'].includes(existing)) throw new Error('--existing must be keep, update or override.');
   if (project && !isAbsolute(project)) throw new Error('--project must be an absolute path.');
   const policy = template ?? await fs.readFile(TEMPLATE, 'utf8');
   let root;
@@ -108,16 +108,32 @@ export async function installRules({ project, user = false, codexRoot, claudeRoo
     const body = item.kind === 'codex'
       ? `Read and follow ${JSON.stringify(policyPath)} before planning or implementing technical work. This owner-controlled policy also governs delegated agents.`
       : `@${relative(dirname(item.path), canonical).split(sep).join('/').replace(/\s/g, '\\$&')}`;
-    candidates.push({ ...item, text: pointer(before?.text ?? '', body, item.path), before });
+    candidates.push({ ...item, body, text: pointer(before?.text ?? '', body, item.path), before });
   }
   const installed = candidates[0].before !== null || candidates.slice(1).some(item => item.before?.text.includes(BEGIN));
+  let decision = existing;
   if (installed) {
-    log(`Existing AI-MCP rules found at ${canonical}. Choose Keep or Override (default: Keep).`);
-    let decision = existing;
+    log(`Existing AI-MCP rules found at ${canonical}. Choose Keep, Update or Override (default: Keep).`);
     if (!decision && interactive && choose) decision = await choose();
-    if (!decision) throw new Error('Existing installation: choose --existing keep or --existing override. No files were changed.');
+    if (!decision) throw new Error('Existing installation: choose --existing keep, --existing update or --existing override. No files were changed.');
     if (decision === 'keep') { log('Keep selected. No files were changed.'); return { status: 'kept', canonical, changed: [] }; }
-    if (decision !== 'override') throw new Error('Expected Keep or Override. No files were changed.');
+    if (!['update', 'override'].includes(decision)) throw new Error('Expected Keep, Update or Override. No files were changed.');
+  }
+  const policyPreserved = decision === 'update' && canonicalBefore !== null;
+  if (decision === 'update') {
+    if (canonicalBefore) candidates[0].text = canonicalBefore.text;
+    for (const item of candidates.slice(1)) {
+      if (!item.before?.text.includes(BEGIN)) continue;
+      const currentBody = item.before.text.slice(item.before.text.indexOf(BEGIN) + BEGIN.length,
+        item.before.text.indexOf(END)).trim();
+      const matching = item.kind === 'claude'
+        ? currentBody === item.body
+        : [JSON.stringify(user ? canonical : '.ai-mcp/collaboration.md'),
+          '`' + (user ? canonical : '.ai-mcp/collaboration.md') + '`',
+          user ? canonical : '.ai-mcp/collaboration.md'].some(path => currentBody.startsWith(`Read and follow ${path} `));
+      if (!matching) throw new Error(`Update conflict in managed reference: ${item.path}. No files were changed.`);
+      item.text = item.before.text;
+    }
   }
   const changes = candidates.filter(item => item.before?.text !== item.text);
   // Validate every snapshot before making any directory, backup or instruction change.
@@ -126,7 +142,7 @@ export async function installRules({ project, user = false, codexRoot, claudeRoo
     if (JSON.stringify(await snapshot(item.path)) !== JSON.stringify(item.before)) throw new Error(`File changed during installation: ${item.path}`);
   }
   let backup;
-  if (installed && changes.some(item => item.before)) {
+  if (changes.some(item => item.before)) {
     backup = join(root, '.ai-mcp', 'backups', `${Date.now()}-${randomUUID()}`);
     await guard(root, backup);
     await fs.mkdir(backup, { recursive: true, mode: 0o700 });
@@ -160,10 +176,11 @@ export async function installRules({ project, user = false, codexRoot, claudeRoo
     throw new Error(`${error.message}. Installation may be partial (${written.length} files written). Backup: ${backup ?? 'none'}.`);
   }
   log(`AI-MCP rules installed: ${canonical}`);
+  if (policyPreserved) log('Existing canonical policy preserved byte-for-byte. Missing references were added; latest-template parity is not asserted.');
   if (backup) log(`Previous changed files backed up privately: ${backup}`);
   if (user) log('Both native clients must be able to read the shared policy in the Claude config root. This check cannot prove future sandbox or container access; use project scope where necessary.');
   log('Start a new client session so its instruction files are loaded. MCP registration is a separate setup step.');
-  return { status: 'installed', canonical, changed: written, backup };
+  return { status: 'installed', canonical, changed: written, backup, policyPreserved };
 }
 
 export async function main(args = process.argv.slice(2)) {
@@ -173,10 +190,12 @@ export async function main(args = process.argv.slice(2)) {
     else if (args[i] === '--user') options.user = true;
     else if (args[i] === '--existing') options.existing = args[++i];
     else if (args[i] === '--help') {
-      console.log(`Usage: node scripts/install-rules.mjs --project /absolute/project | --user [--existing keep|override]
+      console.log(`Usage: node scripts/install-rules.mjs --project /absolute/project | --user [--existing keep|update|override]
 Install permanent collaboration rules for both Codex and Claude. No manual Markdown copying.
-Existing AI-MCP setup always prompts Keep / Override; Keep is the default and makes no changes.
-Non-interactive sessions must explicitly pass --existing keep|override when setup exists.
+Existing AI-MCP setup always prompts Keep / Update / Override; Keep is the default and makes no changes.
+Non-interactive sessions must explicitly pass --existing keep|update|override when setup exists.
+Update adds missing files/references and preserves existing canonical policy bytes; conflicts stop before writes.
+Update does not merge new rule clauses into a customized existing policy.
 An AI may pass --existing override only after the owner explicitly chooses Override.
 Override backs up changed existing files and preserves unrelated instruction text.
 User scope respects CODEX_HOME and CLAUDE_CONFIG_DIR. Both clients need access to the shared policy.
@@ -188,10 +207,11 @@ This command does not register MCP servers or make writable rules technically im
   await installRules({ ...options, interactive, choose: async () => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
-      const answer = (await rl.question('Keep or Override? [Keep]: ')).trim().toLowerCase();
+      const answer = (await rl.question('Keep, Update or Override? [Keep]: ')).trim().toLowerCase();
       if (!answer || answer === 'keep' || answer === 'k') return 'keep';
+      if (answer === 'update' || answer === 'u') return 'update';
       if (answer === 'override' || answer === 'o') return 'override';
-      throw new Error('Expected Keep or Override. No files were changed.');
+      throw new Error('Expected Keep, Update or Override. No files were changed.');
     } finally { rl.close(); }
   } });
 }

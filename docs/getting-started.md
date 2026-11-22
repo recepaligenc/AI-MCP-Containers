@@ -95,9 +95,14 @@ read the shared policy. The installer's readability check cannot prove access fr
 a later sandbox or another container. User rules do not add mounts or filesystem
 permissions. Use project scope when the global reference is inaccessible.
 
-Existing AI-MCP setup always produces a warning and a **Keep / Override** choice,
+Existing AI-MCP setup always produces a warning and a **Keep / Update / Override** choice,
 even when its content is identical. Press Enter for **Keep**, which changes no
-files or timestamps. **Override** updates the managed policy/references, preserves
+files or timestamps. **Update** adds missing files and references while preserving
+existing canonical policy bytes and unrelated instruction text. It does not merge
+new rule clauses into customized policy. Conflicting or unfamiliar managed
+references stop the preflight before any writes. A preserved policy is not claimed
+to match the newest template. Changed existing instruction files are backed up
+privately before appending missing references. **Override** updates the managed policy/references, preserves
 unrelated instruction text and privately backs up changed existing files under
 `.ai-mcp/backups/`. Keep those backups private and out of version control. A backup
 index identifies each original file. The installer refuses ambiguous markers and
@@ -108,6 +113,7 @@ existing setup without writing. After **you** choose, rerun with one of:
 
 ```bash
 node scripts/install-rules.mjs --project /absolute/path/to/your/project --existing keep
+node scripts/install-rules.mjs --project /absolute/path/to/your/project --existing update
 node scripts/install-rules.mjs --project /absolute/path/to/your/project --existing override
 ```
 
@@ -139,8 +145,10 @@ root to include several repositories.
 
 ## 7. Update without losing local decisions
 
-Pull repository updates. Rerun the rule installer and choose Keep or Override for
-the installed policy. Existing projects are not silently rewritten. Refresh Codex
+Pull repository updates. Rerun the rule installer and choose Keep, Update or Override for
+the installed policy. Update repairs missing installation structure; replacing or
+merging newer policy text requires an explicit owner decision. Existing projects
+are not silently rewritten. Refresh Codex
 with `./refresh-codex-bin.sh --recreate` after a relevant extension update; Claude's
 launcher selects its newest compatible installed extension at invocation time.
 Rebuild changed services with `./run-docker.sh --build`. The optional documented
