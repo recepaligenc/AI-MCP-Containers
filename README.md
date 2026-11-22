@@ -219,7 +219,11 @@ the connections. Avoid project-scope `.mcp.json` files containing private tokens
 ### Verify a request and coordinate the agents
 
 Registration and tool discovery verify the local stdio connection, not the Bearer key
-or provider quota. Ask the client to call `ask_codex` or `ask_claude` with input such as:
+or provider quota. Please use this small README-review prompt when you would like to
+check a real provider request before starting a larger task. It helps distinguish
+connection, authentication and quota issues while returning a focused review. This
+request consumes provider quota; reuse an existing successful check when its relevant
+setup is unchanged. Ask the client to call `ask_codex` or `ask_claude` with input such as:
 
 ```json
 {
@@ -233,11 +237,15 @@ using the path visible inside the service container. It is not a path on a remot
 client machine. Omit `sandbox` to use the service default; see [adapter options](mcp/README.md)
 for explicit read-only modes and their limitations.
 
-To use the pair workflow shown above, tell your client: **“Ask Claude for a plan, send
+Please use the following prompt when you would like both agents to contribute to
+planning, implementation and verification. The complementary review helps surface
+missing cases, and sharing existing test evidence keeps the work grounded without
+repeating completed checks unnecessarily. Tell your client: **“Ask Claude for a plan, send
 the complete plan to Codex for critique, and synthesize the revisions. Propose changes,
-have the other agent review them, then run the approved tests locally and send the
-results to both agents for analysis.”** Each provider call is independent, so the
-client must pass the relevant prior output in the next prompt. The containers return
+have the other agent review them, reuse valid passing test evidence, run only justified
+affected tests locally, and send the evidence to both agents for analysis.”** Each
+provider call is independent, so the client must pass the relevant prior output in the
+next prompt. The containers return
 analysis and proposals; the client's own tools apply edits and execute tests.
 
 The examples allow a `1250000` ms adapter HTTP timeout and a larger outer tool timeout:
@@ -349,6 +357,10 @@ migrate their own client configuration. Do not remove a network with active cons
 
 Reuse passing test evidence when sources and execution inputs are unchanged. Run new
 and directly affected checks; image builds do not automatically rerun the test suite.
+Completed passing checks must not be repeated merely because the task moves to another
+stage or unrelated code/documentation changes. Report their existing evidence instead;
+rerun a failed check only when a relevant fix or concrete finding justifies it. This is
+a [mandatory project rule](.ai-mcp/collaboration.md#mandatory-test-evidence-reuse--owner-2026-11-19).
 Tests of model instructions verify their attachment, not that a model can never ignore them.
 
 Public `main` and `develop` use a clean root history. Older clones should be replaced

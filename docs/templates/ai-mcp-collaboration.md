@@ -176,6 +176,13 @@ Rerun only the affected tests when relevant code, dependencies, fixtures, the te
 
 Before any test, lint, build or replay validation command, identify the affected behavior, the prior evidence being reused and the concrete reason for each required run. Select tests precisely, record the source or artifact and result, and stop after the necessary checks pass. If authorization prevents the targeted command, report the block instead of broadening the test selection. Do not describe unexecuted checks as passing. This is a mandatory instruction, not a suggestion, and must be included when delegating verification work.
 
+Completed passing checks MUST NOT be repeated when their relevant source and execution
+inputs are unchanged and their evidence remains available. Unrelated code or
+documentation changes do not invalidate that evidence. Cite the existing result at
+later stages instead of rerunning it. Do not repeat an unchanged failed attempt
+without a relevant fix, changed execution input or concrete diagnostic finding that
+justifies the run.
+
 ## Context and failure handling
 
 Share only the minimum project context needed for the review. Keep credentials,

@@ -12,9 +12,13 @@ you use; both clients reuse the same two services and the same project rule.
 
 ## Paste this into either console
 
-Open the target project in Codex or Claude Code and paste this prompt. It deliberately
-contains no private key or machine-specific path. The agent should discover existing
-paths/settings and ask only for information that cannot be found safely.
+Please use this prompt when you would like to connect the current coding client to
+both providers and save the collaboration workflow for this project. It helps keep
+setup consistent while preserving existing settings and keeping private keys out of
+prompts and tracked files. Open the target project in Codex or Claude Code before
+pasting it. The prompt contains no private key or machine-specific path; the agent
+should discover existing paths/settings and ask only for information that cannot be
+found safely.
 
 ```text
 Set up the current interactive host coding client to use both existing
@@ -159,8 +163,12 @@ and [Claude instruction/import documentation](https://code.claude.com/docs/en/me
 
 ## Verify persistence and actual use separately
 
-After opening a new session in the target project, paste this follow-up prompt if
-the installation agent could not perform fresh-session verification:
+If the installation agent could not perform fresh-session verification, please open
+a new session in the target project and use this follow-up prompt. It helps you check
+three separate things: whether the rule loads, whether the tools are available, and
+whether the complementary provider actually responds. This makes missing setup steps
+easier to identify before you rely on the workflow. Reuse valid existing evidence;
+new functional requests consume provider quota.
 
 ```text
 Follow the project's persistent instructions. First identify automatically loaded
@@ -207,7 +215,10 @@ See [Claude's loading checks](https://code.claude.com/docs/en/memory#my-agentsmd
 ## Apply the rule to a development task
 
 After installation, the saved rule is intended to apply without repeating a prompt.
-Use this explicit task instruction when you want to restate the completion conditions:
+Please use this task prompt when you would like to restate the completion conditions
+for a particular development task. It gives both agents shared acceptance criteria
+and helps keep changes focused, reviews evidence-based, and completed tests from
+being repeated unnecessarily.
 
 ```text
 Apply the persistent Claude-Codex collaboration rule as a completion requirement
