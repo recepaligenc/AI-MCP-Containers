@@ -5,6 +5,7 @@ tests/obj/
 *.user
 .vs/
 .idea/
+test-results/
 
 # Keep repository history and local credentials out of every build stage.
 .git/

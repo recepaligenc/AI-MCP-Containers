@@ -1,0 +1,60 @@
+name: Affected MCP checks
+
+on:
+  push:
+    paths:
+      - 'mcp/bridge-mcp.mjs'
+      - 'mcp/test/**'
+      - 'mcp/package*.json'
+      - 'package*.json'
+      - '.nvmrc'
+      - '.github/workflows/mcp-checks.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  affected-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEST_PATTERN: ^(tools/call|a sandbox|token is read|the shim REALLY|cwd is forwarded|sandbox is validated|a call with no cwd|the claude provider|notifications/cancelled|deprecated client launcher|structured output|response body)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record selected source and execution configuration
+        run: |
+          mkdir -p test-results
+          {
+            git rev-parse HEAD
+            uname -a
+            node --version
+            printf 'Selection: %s\n' "$TEST_PATTERN"
+            printf '%s\n' 'Reason: adapter source, fixture, runtime configuration or workflow changed in this push.'
+            git ls-files -z -- 'mcp/*.mjs' 'mcp/test/*' 'mcp/package*.json' 'package*.json' '.nvmrc' '.github/workflows/mcp-checks.yml' | xargs -0 sha256sum
+            printf '%s\n' 'node --test --test-name-pattern="$TEST_PATTERN" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/mcp.xml mcp/test/mcp.test.mjs'
+          } > test-results/source-and-command.txt
+      - name: Run only affected MCP HTTP consumers
+        run: node --test --test-name-pattern="$TEST_PATTERN" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/mcp.xml mcp/test/mcp.test.mjs
+      - name: Require executed tests and hash the result
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const report = readFileSync('test-results/mcp.xml');
+          const text = report.toString();
+          if (!/<testcase\b/.test(text) || /<(failure|error|skipped)\b/.test(text)) throw new Error('No passing executed MCP tests');
+          appendFileSync('test-results/source-and-command.txt', createHash('sha256').update(report).digest('hex') + '\n');
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-evidence-${{ github.sha }}
+          path: test-results/

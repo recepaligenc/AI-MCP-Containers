@@ -5,6 +5,7 @@ tests/obj/
 *.user
 .vs/
 .idea/
+test-results/
 
 # Local secrets — never commit
 .env

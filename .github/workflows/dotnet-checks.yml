@@ -1,0 +1,81 @@
+name: Affected bridge checks
+
+on:
+  push:
+    paths:
+      - 'CodexRunner.cs'
+      - 'ClaudeRunner.cs'
+      - 'ProviderProcess.cs'
+      - 'Program.cs'
+      - 'ResponsesApi.cs'
+      - 'ServiceSecurity.cs'
+      - 'ChatModels.cs'
+      - 'ProviderUsage.cs'
+      - 'CodexSandboxProbe.cs'
+      - 'appsettings.json'
+      - '**/*.csproj'
+      - 'tests/RunnerProcessTests.cs'
+      - 'tests/CodexRunnerSessionTests.cs'
+      - 'tests/ClaudeRunnerSessionTests.cs'
+      - 'tests/ClaudeRunnerAuthReseedTests.cs'
+      - 'tests/ClaudeWeeklyQuotaTests.cs'
+      - 'tests/CodexCapacityTests.cs'
+      - 'tests/ResponsesApiTests.cs'
+      - 'tests/ChatEndpointTests.cs'
+      - '**/Directory.Build.*'
+      - '**/Directory.Packages.*'
+      - '**/NuGet.Config'
+      - '**/nuget.config'
+      - '**/packages.lock.json'
+      - 'global.json'
+      - '.github/workflows/dotnet-checks.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dotnet-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  affected-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEST_FILTER: FullyQualifiedName~RunnerProcessTests|FullyQualifiedName~CodexRunnerSessionTests|FullyQualifiedName~ClaudeRunnerSessionTests|FullyQualifiedName~ClaudeRunnerAuthReseedTests|FullyQualifiedName~ClaudeWeeklyQuotaTests|FullyQualifiedName~CodexCapacityTests|FullyQualifiedName~ResponsesApiTests|FullyQualifiedName~ChatEndpointTests.Responses_|FullyQualifiedName~ChatEndpointTests.Route_variants_require_valid_token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Record selected source and execution configuration
+        run: |
+          mkdir -p test-results
+          {
+            git rev-parse HEAD
+            dotnet --info
+            printf 'Selection: %s\n' "$TEST_FILTER"
+            printf '%s\n' 'Reason: relevant source, fixtures, dependencies or workflow changed in this push.'
+            git ls-files -z -- '*.cs' '*.csproj' '*.props' '*.targets' 'global.json' '*NuGet.Config' '*nuget.config' '*packages.lock.json' 'appsettings.json' '.github/workflows/dotnet-checks.yml' | xargs -0 sha256sum
+          } > test-results/source-and-command.txt
+      - run: dotnet restore tests/AiMcpContainers.Tests.csproj
+      - name: Run only the affected runner and Responses consumers
+        run: |
+          printf '%s\n' 'dotnet test tests/AiMcpContainers.Tests.csproj --no-restore --filter "$TEST_FILTER" --logger "trx;LogFileName=affected.trx" --results-directory test-results' >> test-results/source-and-command.txt
+          dotnet test tests/AiMcpContainers.Tests.csproj --no-restore --filter "$TEST_FILTER" --logger 'trx;LogFileName=affected.trx' --results-directory test-results
+      - name: Require executed tests and hash the result
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, xml.etree.ElementTree as ET
+          report = pathlib.Path('test-results/affected.trx')
+          counters = ET.parse(report).find('.//{*}Counters').attrib
+          assert int(counters['executed']) > 0 and int(counters['failed']) == 0, counters
+          with open('test-results/source-and-command.txt', 'a') as evidence:
+              evidence.write(str(counters) + '\n' + hashlib.sha256(report.read_bytes()).hexdigest() + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dotnet-evidence-${{ github.sha }}
+          path: test-results/

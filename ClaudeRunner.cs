@@ -435,8 +435,6 @@ public sealed class ClaudeRunner : IAgentRunner
 
         ServiceSecurity.ConfigureProviderEnvironment(psi);
         using var proc = new Process { StartInfo = psi };
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
 
         try
         {
@@ -449,46 +447,46 @@ public sealed class ClaudeRunner : IAgentRunner
             return new ClaudeProcessRun(new CodexResult(false, "", "spawn_failed", "Failed to start claude process."), null, null, ex.Message);
         }
 
-        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-
-        try
-        {
-            await proc.StandardInput.WriteAsync(prompt.AsMemory(), ct);
-            proc.StandardInput.Close();
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "failed writing prompt to claude stdin");
-        }
-
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_opts.Timeout);
-
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+        var stderrTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+        string raw;
+        string stderr;
         try
         {
+            try
+            {
+                await proc.StandardInput.WriteAsync(prompt.AsMemory(), timeoutCts.Token);
+                await proc.StandardInput.FlushAsync(timeoutCts.Token);
+                proc.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                _log.LogWarning("claude stdin closed before the prompt was consumed");
+            }
             await proc.WaitForExitAsync(timeoutCts.Token);
+            raw = (await stdoutTask).Trim();
+            stderr = await stderrTask;
         }
         catch (OperationCanceledException)
         {
             TryKill(proc);
-            var timedOut = !ct.IsCancellationRequested;
-            return timedOut
+            if (!await ProviderProcess.ObserveOutputAsync(proc, stdoutTask, stderrTask))
+                _log.LogWarning("claude output cleanup exceeded its deadline");
+            return !ct.IsCancellationRequested
                 ? new ClaudeProcessRun(new CodexResult(false, "", "timeout", $"Claude timed out after {_opts.Timeout.TotalSeconds:F0}s."), null, null, null)
                 : new ClaudeProcessRun(new CodexResult(false, "", "cancelled", "Request was cancelled."), null, null, null);
         }
 
-        var raw = stdout.ToString().Trim();
         var sessionId = TryParseSessionId(raw);
         var inputTokens = TryParseInputTokens(raw);
 
         if (proc.ExitCode != 0 || IsErrorResult(raw))
         {
             var detail = (stderr + raw).Trim();
-            _log.LogWarning("claude exited {Code}: {Detail}", proc.ExitCode, detail);
-            // Don't leak raw stderr to the client; log it, return a generic message.
+            _log.LogWarning("claude exited {Code}; provider output omitted", proc.ExitCode);
+            // Keep raw output only for internal classification, never in logs or client errors.
             return new ClaudeProcessRun(
                 new CodexResult(false, "", "claude_failed", $"Claude exited with code {proc.ExitCode}."),
                 sessionId,

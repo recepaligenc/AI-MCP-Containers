@@ -373,6 +373,16 @@ the project-write boundary. These containers are for trusted callers, not an exe
 sandbox for untrusted prompts or mutually untrusted users. Model instructions and child
 environment cleanup do not establish an operating-system secrecy boundary.
 
+The per-process `AI_MCP_TIMEOUT_SECONDS` deadline covers prompt writes and flushes,
+process exit and stdout/stderr reads. Timeout or caller cancellation triggers
+process-tree termination while the provider is still running; output-reader cleanup
+has a separate one-second bound. This is a process deadline, not a total budget
+across retries. A child orphaned after its parent exits can outlive the call.
+
+Failed-provider warnings record the exit code, not raw stdout/stderr. Output remains
+in memory for quota, authentication and capacity classification. This does not
+sanitize every application/provider log or establish a confidentiality boundary.
+
 ## Subscriptions and automatic updates
 
 Codex shares the host `~/.codex` directory so atomic OAuth refreshes remain coordinated.
@@ -394,6 +404,27 @@ The updater refuses unsafe destinations before synchronizing. See
 [systemd/README.md](systemd/README.md), [CLAUDE-RUNTIME.md](CLAUDE-RUNTIME.md) and
 [mcp/README.md](mcp/README.md) for provider, updater and client details.
 
+## Responses text API
+
+`POST /v1/responses` implements a text-only subset, not the full OpenAI API.
+It accepts `input` as a nonempty string or a message array with text content.
+Message content may be a string or an array of text parts; multimodal inputs and
+tool execution are outside this contract. Top-level `instructions` are placed first,
+then system/developer messages in their original relative order, then other messages.
+Instructions alone do not replace the required input. The requested `model` remains
+informational; the response reports the provider's actual model when available.
+
+The accepted fields are `input`, `instructions`, `model`, `stream`, `tools` and
+`previous_response_id`. Unknown fields and duplicate keys receive `400` before a
+provider runs. `stream: true`, nonempty `tools` and nonempty `previous_response_id`
+receive `unsupported_parameter`: streaming, client tools and response chaining are
+not implemented. Omitted/null optional fields, `stream: false`, `tools: []` and an
+empty previous response ID are accepted. Empty/whitespace instructions are ignored;
+an empty model is accepted as informational. Wrong field types receive `bad_request`,
+non-object JSON roots receive `bad_json_type`, and missing/empty input receives
+`missing_input`. Errors use the bridge's `{ "error": "...", "code": "..." }` envelope.
+Combined instructions and input remain subject to the 100,000-character limit.
+
 ## Migration and verification
 
 Application names are `AiMcpContainers` and `AiMcp`; active environment names use
@@ -409,6 +440,18 @@ stage or unrelated code/documentation changes. Report their existing evidence in
 rerun a failed check only when a relevant fix or concrete finding justifies it. This is
 a [mandatory project rule](.ai-mcp/collaboration.md#mandatory-test-evidence-reuse--owner-2026-11-19).
 Tests of model instructions verify their attachment, not that a model can never ignore them.
+
+The focused [bridge CI](.github/workflows/dotnet-checks.yml) and
+[adapter CI](.github/workflows/mcp-checks.yml) run on pushes changing their relevant
+source, fixtures, dependencies or execution configuration. Unrelated documentation
+does not trigger these checks, and a separate pull-request trigger is deliberately
+omitted to avoid duplicate runs. These are focused checks, not full-suite coverage;
+they are not configured as required branch-protection checks.
+Reuse an existing successful run for unchanged inputs instead of manually rerunning it.
+Each run uploads its source hashes, commit, actual tool versions, test selection and
+TRX/JUnit results, including available evidence on failure. Local reports belong in
+the ignored `test-results/` directory. Preparing these workflows locally does not
+prove they have run on GitHub.
 
 Public `main` and `develop` use a clean root history. Older clones should be replaced
 to avoid reintroducing removed commits. Rewriting branch history cannot erase other

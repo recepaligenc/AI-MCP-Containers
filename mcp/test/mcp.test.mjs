@@ -689,3 +689,60 @@ test('tools/call preserves native usage and emits distinct deduplicatable invoca
   assert.notEqual(receipt.invocationId, second.structuredContent.receipt.invocationId);
   assert.deepEqual(JSON.parse(first.content[1].text.replace('AI-MCP usage receipt: ', '')), receipt);
 });
+
+// Use a separate upstream so a response can deliberately stall after its headers.
+async function stalledBodyCall({ cancel = false, status = 200 } = {}) {
+  let child, cancelTimer, watchdog;
+  let closeObserved = false;
+  const upstream = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.on('close', () => { if (!res.writableFinished) closeObserved = true; });
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.write('{"answer":"');
+      if (cancel) {
+        // Let fetch receive the headers and enter its body read before cancellation.
+        cancelTimer = setTimeout(() => child.stdin.write(JSON.stringify({ jsonrpc: '2.0',
+          method: 'notifications/cancelled', params: { requestId: 301 } }) + '\n'), 150);
+      }
+    });
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  try {
+    child = spawn(process.execPath, [SHIM], { env: { ...process.env,
+      AI_MCP_URL: `http://127.0.0.1:${upstream.address().port}`, AI_MCP_TOKEN: TOKEN,
+      AI_MCP_PROVIDER: 'codex', AI_MCP_TIMEOUT_MS: cancel ? '3000' : '250' },
+      stdio: ['pipe', 'pipe', 'pipe'] });
+    child.stderr.resume();
+    const result = new Promise((resolve, reject) => {
+      let output = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', chunk => {
+        output += chunk;
+        const nl = output.indexOf('\n');
+        if (nl >= 0) resolve(JSON.parse(output.slice(0, nl)).result);
+      });
+      child.on('error', reject);
+      watchdog = setTimeout(() => reject(new Error('stalled body did not finish within test deadline')), 4500);
+    });
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 301, method: 'tools/call',
+      params: { name: 'ask_codex', arguments: { prompt: 'stalled body' } } }) + '\n');
+    const response = await result;
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, cancel ? /cancelled by MCP client/ : /timeout after 250ms/);
+    // Cancellation must close the upstream response, not merely report an error.
+    const until = Date.now() + 1000;
+    while (!closeObserved && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(closeObserved, true);
+  } finally {
+    clearTimeout(watchdog);
+    clearTimeout(cancelTimer);
+    child?.kill();
+    upstream.closeAllConnections();
+    await new Promise(resolve => upstream.close(resolve));
+  }
+}
+
+test('response body deadline aborts a stalled successful response after headers', () => stalledBodyCall());
+test('response body deadline also covers stalled HTTP error bodies', () => stalledBodyCall({ status: 502 }));
+test('response body cancellation aborts after headers have arrived', () => stalledBodyCall({ cancel: true }));

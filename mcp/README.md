@@ -64,6 +64,11 @@ The HTTP service additionally limits total simultaneous requests across all IDs.
 For Claude's 1200-second provider timeout, use a larger adapter/host timeout so the
 provider can return its typed failure before the outer transport cancels it.
 
+`AI_MCP_TIMEOUT_MS` applies until the response body is fully consumed, including
+HTTP error bodies. Caller cancellation is still honored after response headers
+arrive; either deadline expiry or cancellation aborts the in-flight HTTP request,
+including body reads.
+
 Old MCP launcher aliases beginning with `BRIDGE_` are accepted only as a migration
 fallback when the matching `AI_MCP_*` value is absent. New launcher configurations
 and the service `.env` must use `AI_MCP_*`.

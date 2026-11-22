@@ -498,6 +498,75 @@ public class ChatEndpointTests
 
     // ---- the login UI itself must be reachable without a token ----
     [Fact]
+    public async Task Responses_endpoint_forwards_top_level_instructions()
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        var response = await client.PostAsJsonAsync("/v1/responses", new { input = "hello", instructions = "Return JSON" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Return JSON\n\nhello", app.Runner.LastPrompt);
+    }
+
+    [Theory]
+    [InlineData("null", "bad_json_type")]
+    [InlineData("[]", "bad_json_type")]
+    [InlineData("123", "bad_json_type")]
+    [InlineData("true", "bad_json_type")]
+    [InlineData("\"text\"", "bad_json_type")]
+    [InlineData("{", "bad_json")]
+    [InlineData("{}", "missing_input")]
+    [InlineData("""{"input":[]}""", "missing_input")]
+    [InlineData("""{"input":" "}""", "missing_input")]
+    [InlineData("""{"input":"x","stream":true}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","tools":[{}]}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","previous_response_id":"resp1"}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","background":true}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","metadata":null}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","instructions":{}}""", "bad_request")]
+    [InlineData("""{"input":"x","model":1}""", "bad_request")]
+    [InlineData("""{"input":"x","tools":{}}""", "bad_request")]
+    [InlineData("""{"input":"x","previous_response_id":1}""", "bad_request")]
+    [InlineData("""{"input":"x","stream":"true"}""", "bad_request")]
+    [InlineData("""{"input":1}""", "bad_request")]
+    [InlineData("""{"input":"x","input":"y","unknown":null}""", "bad_request")]
+    [InlineData("""{"input":"x","stream":1,"unknown":true}""", "unsupported_parameter")]
+    [InlineData("""{"input":"x","stream":true,"tools":1}""", "bad_request")]
+    public async Task Responses_endpoint_rejects_invalid_or_unsupported_requests_without_running_cli(string json, string code)
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/v1/responses", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(code, (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.Code);
+        Assert.Equal(0, app.Runner.Calls);
+        Assert.Equal(0, app.ClaudeRunner.Calls);
+    }
+
+    [Theory]
+    [InlineData("""{"input":"x","stream":false,"tools":[],"previous_response_id":"","model":"","instructions":" "}""")]
+    [InlineData("""{"input":"x","stream":null,"tools":null,"previous_response_id":null,"model":null,"instructions":null}""")]
+    public async Task Responses_endpoint_accepts_inactive_optional_features(string json)
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        var response = await client.PostAsync("/v1/responses", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("x", app.Runner.LastPrompt);
+    }
+
+    [Fact]
+    public async Task Responses_endpoint_bounds_combined_instructions_and_input()
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        var response = await client.PostAsJsonAsync("/v1/responses", new { input = "x", instructions = new string('p', ChatRequestValidator.MaxPromptLength) });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("prompt_too_long", (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.Code);
+        Assert.Equal(0, app.Runner.Calls);
+    }
+
+    [Fact]
     public async Task Root_is_not_blocked_by_auth_gate()
     {
         using var app = new TestApp { Token = TestApp.ExplicitToken };

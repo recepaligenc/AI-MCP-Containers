@@ -332,8 +332,8 @@ app.MapPost("/chat", async (
     });
 });
 
-// OpenAI Responses-compatible endpoint: lets an OpenAI client target this bridge by only
-// swapping its base URL. The request's `model` is informational — this instance's own
+// Text-only Responses subset. Unsupported parameters are rejected explicitly.
+// The request's `model` is informational — this instance's own
 // provider serves the call. Body is flattened to a prompt, run, and returned in OpenAI shape.
 app.MapPost("/v1/responses", async (
     HttpRequest httpReq,
@@ -356,6 +356,10 @@ app.MapPost("/v1/responses", async (
     using (doc)
     {
         var root = doc.RootElement;
+
+        var requestError = ResponsesApi.ValidateRequest(root);
+        if (requestError is not null)
+            return Results.Json(requestError, statusCode: 400);
 
         var prompt = ResponsesApi.BuildPrompt(root);
         if (string.IsNullOrWhiteSpace(prompt))

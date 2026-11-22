@@ -347,8 +347,6 @@ public sealed class CodexRunner : IAgentRunner
 
         ServiceSecurity.ConfigureProviderEnvironment(psi);
         using var proc = new Process { StartInfo = psi };
-        var stderr = new StringBuilder();
-
         try
         {
             if (!proc.Start())
@@ -360,41 +358,41 @@ public sealed class CodexRunner : IAgentRunner
             return new ProcessRun(new CodexResult(false, "", "spawn_failed", "Failed to start codex process."), null, null, ex.Message);
         }
 
-        proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-        proc.BeginErrorReadLine();
-
-        // Feed the prompt, then close stdin so codex stops waiting for more.
-        try
-        {
-            await proc.StandardInput.WriteAsync(prompt.AsMemory(), ct);
-            proc.StandardInput.Close();
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "failed writing prompt to codex stdin");
-        }
-
-        // Drain stdout (we don't use it, but an unread pipe can deadlock the child).
-        var drain = proc.StandardOutput.ReadToEndAsync(ct);
-
+        // The deadline covers stdin, process exit and both output pipes.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_opts.Timeout);
-
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+        var stderrTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+        string stdout;
+        string stderr;
         try
         {
+            try
+            {
+                await proc.StandardInput.WriteAsync(prompt.AsMemory(), timeoutCts.Token);
+                await proc.StandardInput.FlushAsync(timeoutCts.Token);
+                proc.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // A CLI may exit before consuming stdin; classify its exit below.
+                _log.LogWarning("codex stdin closed before the prompt was consumed");
+            }
             await proc.WaitForExitAsync(timeoutCts.Token);
+            stdout = await stdoutTask;
+            stderr = await stderrTask;
         }
         catch (OperationCanceledException)
         {
             TryKill(proc);
+            if (!await ProviderProcess.ObserveOutputAsync(proc, stdoutTask, stderrTask))
+                _log.LogWarning("codex output cleanup exceeded its deadline");
             TryDelete(lastMsgFile);
-            var timedOut = !ct.IsCancellationRequested;
-            return timedOut
+            return !ct.IsCancellationRequested
                 ? new ProcessRun(new CodexResult(false, "", "timeout", $"Codex timed out after {_opts.Timeout.TotalSeconds:F0}s."), null, null, null)
                 : new ProcessRun(new CodexResult(false, "", "cancelled", "Request was cancelled."), null, null, null);
         }
 
-        var stdout = await drain; // ensure pipe fully consumed
         var threadId = captureSession ? TryParseThreadIdFromJsonEvents(stdout) : null;
         var nativeUsage = NativeUsage.ParseCodexEvents(stdout, resumeSessionId is not null);
         var inputTokens = captureSession ? nativeUsage.LastInputTokens : null;
@@ -402,7 +400,7 @@ public sealed class CodexRunner : IAgentRunner
         if (proc.ExitCode != 0)
         {
             var detail = (stderr + stdout).Trim();
-            _log.LogWarning("codex exited {Code}: {Detail}", proc.ExitCode, detail);
+            _log.LogWarning("codex exited {Code}; provider output omitted", proc.ExitCode);
             TryDelete(lastMsgFile);
             // Classify structured backend errors without exposing raw stderr or prompt text.
             var capacity = HasModelCapacityError(stdout);

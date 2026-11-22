@@ -72,6 +72,7 @@ public class ClaudeWeeklyQuotaTests
                 Timeout = TimeSpan.FromSeconds(10), HomeDir = dir, ReuseSession = reuse }, NullLogger<ClaudeRunner>.Instance);
             using var app = new QuotaApp(runner);
             using var client = app.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new("Bearer", TestApp.DefaultToken);
             for (var i = 0; i < 2; i++)
             {
                 var response = await client.PostAsJsonAsync("/chat", new { provider = "claude", prompt = "independent review", conversationId = "quota-" + i });
@@ -104,7 +105,7 @@ public class ClaudeWeeklyQuotaTests
             builder.UseSetting("AiMcp:Roots", "/tmp");
             builder.UseSetting("AiMcp:Provider", "claude");
             builder.UseSetting("AiMcp:Providers", "claude");
-            builder.UseSetting("AiMcp:Token", "");
+            builder.UseSetting("AiMcp:Token", TestApp.DefaultToken);
             builder.UseSetting("AI_MCP_CODEX_INNER_SANDBOX", "available");
             builder.ConfigureServices(services => {
                 services.RemoveAll<IAgentRunnerRegistry>();

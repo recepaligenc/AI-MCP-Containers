@@ -166,7 +166,9 @@ async function callBridge(prompt, cwd, sandbox, cancellationSignal) {
   }, CFG.timeoutMs);
   const cancel = () => ac.abort();
   cancellationSignal?.addEventListener('abort', cancel, { once: true });
+  if (cancellationSignal?.aborted) cancel();
   let res;
+  let text;
   try {
     res = await fetch(`${url}/chat`, {
       method: 'POST',
@@ -174,10 +176,12 @@ async function callBridge(prompt, cwd, sandbox, cancellationSignal) {
       body: JSON.stringify(body),
       signal: ac.signal,
     });
+    // Keep the deadline and client cancellation active until the body is consumed.
+    text = await res.text();
   } catch (e) {
-    if (e?.name === 'AbortError' && !timedOut)
+    if (ac.signal.aborted && cancellationSignal?.aborted)
       throw new Error('bridge request cancelled by MCP client');
-    const reason = e?.name === 'AbortError'
+    const reason = timedOut
       ? `timeout after ${CFG.timeoutMs}ms`
       : `connection failed (${e?.code || e?.message || 'unknown'})`;
     throw new Error(`Cannot reach codex-bridge at ${url}: ${reason}. Is the container up? (docker compose up -d)`);
@@ -187,7 +191,6 @@ async function callBridge(prompt, cwd, sandbox, cancellationSignal) {
   }
 
   let data = null;
-  const text = await res.text();
   try {
     data = text ? JSON.parse(text) : null;
   } catch {

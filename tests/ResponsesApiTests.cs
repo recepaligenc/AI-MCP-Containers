@@ -62,6 +62,36 @@ public class ResponsesApiTests
 
     // ---- BuildResponse ----
     [Fact]
+    public void Top_level_instructions_precede_input_instructions_in_original_order()
+    {
+        var root = Parse("""{"instructions":"top","input":[{"role":"user","content":"u"},{"role":"developer","content":"dev"},{"role":"system","content":"sys"}]}""");
+        Assert.Equal("top\n\ndev\n\nsys\n\nu", ResponsesApi.BuildPrompt(root));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("12")]
+    [InlineData("true")]
+    [InlineData("\"text\"")]
+    public void Nonobject_root_is_safe_for_parser(string json)
+    {
+        Assert.Null(ResponsesApi.BuildPrompt(Parse(json)));
+        Assert.Equal("bad_json_type", ResponsesApi.ValidateRequest(Parse(json))!.Code);
+    }
+
+    [Theory]
+    [InlineData("""{"input":"x","instructions":""}""")]
+    [InlineData("""{"input":"x","instructions":"  "}""")]
+    [InlineData("""{"input":"x","instructions":null}""")]
+    public void Empty_optional_instructions_do_not_change_input(string json)
+        => Assert.Equal("x", ResponsesApi.BuildPrompt(Parse(json)));
+
+    [Fact]
+    public void Top_level_instructions_do_not_replace_missing_input()
+        => Assert.Null(ResponsesApi.BuildPrompt(Parse("""{"instructions":"top","input":[]}""")));
+
+    [Fact]
     public void Response_has_openai_shape_with_answer_text()
     {
         var obj = ResponsesApi.BuildResponse("the answer", "gpt-x", "codex");
