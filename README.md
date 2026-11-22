@@ -261,8 +261,28 @@ and [shared collaboration rule template](docs/templates/ai-mcp-collaboration.md)
 The recipe preserves existing settings, uses the private token file, and connects both
 clients to one canonical project rule through `AGENTS.md` and `CLAUDE.md`.
 
+For covered development tasks, the rule requires a complementary-provider plan review
+and a final change/test-evidence review. Claude-led work iterates with Codex, and
+Codex-led work with Claude, up to 20 review requests across the entire task. It prefers
+the smallest sufficient durable change and evaluates architectural fit, security and
+performance. It finishes early when ready and reports unresolved work rather than
+claiming completion after quota failure, stalled review or exhausted budget.
+
+For UI design or redesign, it requires three visual alternatives and explicit user
+approval before implementation. Visible UI changes require AI inspection of rendered
+views and evidence that affected interactions work, with simple UX and existing fonts
+unless a change is requested. The adapter is text-only: an image-capable host performs
+visual inspection while the peer reviews code and interaction evidence.
+
+The rule is active in this repository through [AGENTS.md](AGENTS.md),
+[CLAUDE.md](CLAUDE.md) and [one canonical policy](.ai-mcp/collaboration.md).
+Agents are prohibited from independently changing, weakening or bypassing that policy
+or its references. Amendments require an explicit user instruction. This is an agent
+policy; technical immutability requires controls outside the agent's write authority.
+
 MCP registration is user-scoped; the rule is project-scoped by default. The guide also
 explains an explicit all-projects user rule. Start a new client session after setup.
+The guide verifies rule loading, tool discovery and actual peer reviews separately.
 These are persistent model instructions, not guaranteed orchestration or a permission
 bypass; the client still owns edits/tests and reports unavailable reviews honestly.
 

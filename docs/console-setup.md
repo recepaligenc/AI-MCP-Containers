@@ -37,7 +37,9 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
 3. Copy the shared collaboration template, including its BEGIN/END AI-MCP
    COLLABORATION markers, into .ai-mcp/collaboration.md in the target project.
    Preserve existing content outside that block and update the block idempotently
-   instead of duplicating it or replacing unrelated rules.
+   instead of duplicating it or replacing unrelated rules. This request authorizes
+   initial installation. If an existing owner-controlled policy differs, preserve it
+   and present the proposed policy change unless I explicitly authorized that change.
 4. Add a managed instruction to the active project Codex guidance file to read and
    follow .ai-mcp/collaboration.md. Use AGENTS.md unless an existing non-empty
    AGENTS.override.md is the active guidance; preserve it instead of creating a new
@@ -46,14 +48,26 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
    use @.ai-mcp/collaboration.md in root CLAUDE.md, or
    @../.ai-mcp/collaboration.md in .claude/CLAUDE.md. Create root CLAUDE.md if neither
    exists. Preserve other instructions and add each pointer/import only once.
-6. Verify registration and tool discovery without making model calls merely to test
-   installation. Reuse unchanged passing evidence; do not run project tests for this
-   configuration-only change. If a new client session is required, report that and
-   leave live discovery pending rather than claiming it succeeded.
-7. Keep setup local and reviewable, without automatically committing or publishing
+6. Verify saved rule contents, active instruction paths, imports and MCP registration.
+   Reuse unchanged passing evidence; do not rerun project tests for this setup change.
+   Verify automatic guidance discovery in a fresh session using the client's loaded-
+   file view or approved, path-only startup diagnostics. Check that its guidance leads
+   to the canonical rule. A manually forced file read or self-report is not proof of
+   persistence. Do not enable plaintext session logging automatically or expose full
+   logs. If you cannot inspect fresh-session loading, leave that verification pending.
+7. In the fresh session, verify the mandatory workflow with a small synthetic plan
+   and patch proposal, without changing application files. Obtain an actual plan
+   review from the complementary provider, revise the proposal, then obtain a review
+   of the proposal and its test strategy. Label synthetic examples and unexecuted
+   tests honestly. This explicitly requested functional check may consume provider
+   quota and counts toward the shared 20-request task budget. Reuse valid existing
+   evidence and stop on quota/availability failure rather than retrying unchanged calls.
+8. Keep setup local and reviewable, without automatically committing or publishing
    the target project's changes. Report changed files, registration/rule scopes,
-   verification actually performed and anything still needed. Explain that a new
-   client session is needed to load the persistent instructions and MCP settings.
+   request count, verification actually performed and anything still needed. Report
+   persistence loading, MCP discovery and real peer-review execution as separate
+   results. A listed tool or attempted call is not a successful peer review. Do not
+   declare full verification complete while a required response or fresh load is missing.
 ```
 
 The agent must still follow the client's real permission and approval policy. If it
@@ -63,21 +77,50 @@ blocked step; a prompt cannot grant filesystem permissions or bypass an approval
 The token file is loaded by the adapter at startup. An exported `AI_MCP_TOKEN` takes
 precedence, so remove an obsolete exported value if it points at another installation.
 Registration/tool discovery does not prove HTTP authentication, provider login or
-remaining subscription quota. A real provider request is a separate end-to-end check
-and consumes quota.
+remaining subscription quota. The requested functional workflow check uses real
+provider requests and consumes quota; an unavailable provider leaves that check pending.
 
 ## What becomes persistent
 
 The [shared template](templates/ai-mcp-collaboration.md) directs the coordinating
-client to obtain a complementary agent's critique for substantial plans and changes,
-review code and test results, and preserve available passing test evidence. Providers
-receive bounded, stateless review tasks; the host client performs edits and tests.
-Small edits do not trigger a mandatory pair of model requests. Missing reviews and
-quota failures must be reported rather than treated as successful reviews.
+client to obtain a complementary agent's plan review before implementation and a
+review of the final changes and test evidence before completion. This is mandatory
+for technical implementation plans, application code, runtime configuration, security
+behavior, UI and tests. Factual lookups without implementation plans and spelling/
+formatting-only edits are exempt; changes to rendered UI retain applicable UI checks.
 
-The template is a starting point. Keep existing project rules, adapt its managed
-section deliberately, and review the resulting diff. This repository ships the
-template as documentation; it does not activate it in your projects automatically.
+Claude-led work uses Codex as the reviewer; Codex-led work uses Claude. The client
+revises and resubmits concrete changes until acceptance criteria and review evidence
+support completion, with at most 20 complementary-provider requests for the entire
+task. Failed dispatched requests count, and restarting or splitting work does not reset
+the count. Successful unchanged review/test evidence can be reused. The workflow stops
+early when ready, or stops as incomplete on exhausted budget, unresolved material
+disagreement, missing information or provider unavailability.
+
+Each review assesses correctness, architectural fit, security, performance and
+maintenance cost. The preferred solution is the smallest sufficient durable change,
+not a fragile workaround or speculative redesign. Providers receive bounded, stateless
+review tasks; the host client applies edits and executes only justified checks.
+Missing reviews and quota failures block a completion claim unless the user explicitly
+waives the review for that task. A waiver is reported as a waiver, never as a review.
+
+For UI design or redesign, present three distinct visual mockup alternatives and
+obtain the user's explicit approval before applying the design. Preserve existing
+fonts unless requested otherwise, and favor simple interactions. Every visible UI
+change needs AI inspection of rendered views and evidence for affected interactions.
+The text-only MCP adapter does not itself send images; an image-capable host client
+can inspect the views while the complementary provider reviews code and interaction
+evidence. Do not claim image review from a text description or file path alone.
+
+The saved policy prohibits agents from changing, weakening or bypassing it or its
+references on their own initiative. Amendments require an explicit user instruction
+identifying the intended change. A reported task-specific waiver is not a permanent
+exception. Keep unrelated project rules and review authorized changes to the policy.
+
+This repository activates the rule for its own future sessions through root
+`AGENTS.md`, root `CLAUDE.md` and [the canonical policy](../.ai-mcp/collaboration.md).
+The [template](templates/ai-mcp-collaboration.md) matches that policy. Other projects
+receive it only when you explicitly run the installation recipe there.
 
 Typical project layout:
 
@@ -113,6 +156,87 @@ Start a new client session after installation. Codex builds its instruction chai
 session startup; Claude also loads project instructions into new conversations. See
 the [official OpenAI AGENTS.md guide](https://developers.openai.com/codex/guides/agents-md)
 and [Claude instruction/import documentation](https://code.claude.com/docs/en/memory).
+
+## Verify persistence and actual use separately
+
+After opening a new session in the target project, paste this follow-up prompt if
+the installation agent could not perform fresh-session verification:
+
+```text
+Follow the project's persistent instructions. First identify automatically loaded
+guidance from the client's loaded-file view or approved startup evidence, and verify
+that its pointer/import leads to .ai-mcp/collaboration.md. Do not count a manually
+forced file read or an unsupported self-report as persistence evidence. If automatic
+loading cannot be inspected, report it as pending. State the mandatory review stages
+and the current task's request count out of 20. Verify MCP registration/tool discovery.
+
+Then exercise the rule with a small synthetic implementation plan. Obtain a real
+review from the complementary provider, revise a synthetic patch proposal, and
+obtain a review of the proposal and its test strategy. Keep application files
+unchanged and label all synthetic or unexecuted test evidence. Reuse prior valid
+evidence; do not repeat project tests merely for setup. Report rule loading, tool
+discovery and actual peer-review responses separately, with pending/failed steps.
+Stop on quota failure or missing prerequisites; do not claim full success without
+the required provider responses.
+```
+
+| Result | Required evidence |
+| --- | --- |
+| Persistent rule loaded | Fresh-session discovery evidence for the active guidance and its pointer/import to the canonical rule, followed under that guidance. File existence, a manually forced read or self-report alone is insufficient. |
+| MCP connection initialized | Client reports the server and its advertised tool; this alone does not verify the provider request. |
+| Peer workflow exercised | Actual complementary-provider responses for the synthetic plan and resulting proposal, with review decisions and request count. |
+| Application tests | Reported as not run for this synthetic setup check; never inferred from peer-review text. |
+
+These are observable verification results, not proof that a model can never ignore
+an instruction. The 20-request counter and completion gate are client instructions in
+this recipe; this project does not enforce them through a server-side loop or hook.
+
+The owner-controlled policy is also an instruction, not filesystem immutability.
+An agent with write authority can technically alter its files; changing file mode,
+adding a Git hook or calling a file protected does not remove that authority.
+Hard enforcement requires agent-external permissions or managed policy that the agent
+cannot change. No such administrative control is installed by this recipe.
+
+Claude's `/memory` and `/context all` views expose loaded instruction paths. Codex's
+[official verification guide](https://developers.openai.com/codex/guides/agents-md#verify-your-setup)
+describes auditing instruction discovery through startup/session evidence. Inspect
+only the needed path records locally; keep complete logs and transcripts private.
+Plaintext diagnostic logging must be an explicit choice, outside tracked project files.
+See [Claude's loading checks](https://code.claude.com/docs/en/memory#my-agentsmd-isnt-loading).
+
+## Apply the rule to a development task
+
+After installation, the saved rule is intended to apply without repeating a prompt.
+Use this explicit task instruction when you want to restate the completion conditions:
+
+```text
+Apply the persistent Claude-Codex collaboration rule as a completion requirement
+for this development task. If you are Codex, use ask_claude as the peer; if you are
+Claude Code, use ask_codex. Obtain a real plan review before implementation.
+
+Choose the smallest sufficient durable change that fits this service's architecture.
+Have the peer assess correctness, security, performance and maintenance cost. Evaluate
+findings against evidence, implement justified corrections and resubmit the relevant
+changes and test evidence. Do not apply suggestions blindly or expand unrelated scope.
+
+For UI design or redesign, first present three distinct visual mockup alternatives
+and wait for my explicit approval before implementing the design. Preserve existing
+project fonts unless I ask otherwise. For visible UI changes, inspect real rendered
+views with an image-capable AI and check affected interactions with actual evidence.
+Keep the UI simple and report missing visual capability rather than claiming review.
+
+Use at most 20 dispatched peer-review requests for the entire task, including errors,
+plan review and final review. Preserve the count across subtasks and resumed sessions.
+Reuse unchanged passing test/review evidence. Finish early when acceptance criteria
+are met and READY covers the final artifact with no unresolved material findings.
+
+Stop and report incomplete work on exhausted budget, unavailable peer or repeated
+material disagreement without progress. Do not claim completion without the required
+actual review responses unless I explicitly waive the missing stage for this task.
+Report the request count, findings addressed/rejected, evidence and remaining risks.
+Do not weaken, rewrite or bypass the persistent policy or its references on your own
+initiative. Any policy amendment needs my explicit instruction identifying the change.
+```
 
 ## Use the rule across all projects
 
