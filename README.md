@@ -1,7 +1,15 @@
 # AI-MCP-Containers
 
+![Claude and Codex exchange plans, code proposals and test analysis through an MCP client](docs/assets/pair-workflow.gif)
+
+**Example collaborative workflow:** Your MCP client sends one agent's proposal to the
+other for review and brings the results back. Providers analyze the read-only project;
+the client applies approved edits and runs tests. Automatic orchestration is not built in.
+[View the static overview](docs/assets/pair-workflow.png).
+
 Two global Docker services use the host owner's local Codex/ChatGPT and Claude Code
-subscriptions. Each service exposes `/chat`, `/v1/responses` and an MCP stdio adapter.
+subscriptions. Each service exposes `/chat` and `/v1/responses`; a local Node adapter
+makes the service available to MCP clients over stdio.
 No provider API key is required. The service's Bearer key is separate from provider
 authentication; all callers share this installation's accounts and subscription quotas.
 
@@ -71,6 +79,179 @@ from Docker peers and LAN clients. `/health` and the static UI are public. The U
 uses the service's default policy unless the user explicitly selects a supported
 read-only mode. HTTP does not encrypt the key or traffic; use a TLS reverse proxy or
 private tunnel across untrusted networks. A shared key does not identify individual users.
+
+## Connect Claude and Codex as MCP clients
+
+Both Codex and Claude Code can use **both** services: `ask_codex` calls the Codex
+container and `ask_claude` calls the Claude container. The client and provider do not
+need to be the same product. All calls use the Docker host owner's subscriptions.
+
+The MCP client starts `node mcp/bridge-mcp.mjs` locally over **stdio**. The adapter then
+calls the selected service's HTTP API. Do not register ports `8788` or `8789` as direct
+MCP HTTP URLs; these services do not expose the MCP Streamable HTTP transport.
+
+### Shared prerequisites
+
+Start the containers first; registering an MCP server does not start Docker. On each
+client machine, keep a checkout of this repository and install Node.js. Replace every
+absolute-path placeholder below with a path on the **client's** machine:
+
+| Placeholder | What to select |
+| --- | --- |
+| `/absolute/path/to/node` | Node executable, from `command -v node`. An absolute path also works when an IDE has a different `PATH`. |
+| `/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs` | This checkout's adapter script, accessible to the MCP client. |
+| `/absolute/path/to/private/ai-mcp.env` | Private file containing `AI_MCP_TOKEN=<service-key>`. On the Docker host, the repository's ignored `.env` can be used directly. |
+
+Create or edit the private token file outside version control and restrict it with
+`chmod 600 /absolute/path/to/private/ai-mcp.env`. Use the existing **service Bearer key**,
+not a provider API key or OAuth token. A remote client needs only this key; do not copy
+the host's Codex/Claude credential directories. The adapter reads the file itself;
+do not `source` it. An exported `AI_MCP_TOKEN` takes precedence over the file.
+
+The examples below run on the Docker host. For another LAN machine or a client
+container, change `AI_MCP_URL` using the [network access table](#network-access).
+`127.0.0.1` always means the machine/container where the adapter runs. A Docker client
+must join `ai-mcp-shared` and use service port `8080`.
+
+### Codex CLI and VS Code
+
+Codex CLI and the Codex VS Code extension share `~/.codex/config.toml`. Add these
+sections while preserving existing settings. The names `ai_mcp_codex` and
+`ai_mcp_claude` are reserved for these **stdio** registrations: provider-side Codex
+runs disable them to prevent recursive service calls. Do not use these IDs for HTTP
+MCP registrations; conflicting transports fail configuration loading. Other custom
+MCP entries are not disabled by this protection. See the [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp).
+
+```toml
+[mcp_servers.ai_mcp_codex]
+command = "/absolute/path/to/node"
+args = ["/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs"]
+startup_timeout_sec = 20
+tool_timeout_sec = 1300
+
+[mcp_servers.ai_mcp_codex.env]
+AI_MCP_PROVIDER = "codex"
+AI_MCP_URL = "http://127.0.0.1:8788"
+AI_MCP_ENV_FILE = "/absolute/path/to/private/ai-mcp.env"
+AI_MCP_TIMEOUT_MS = "1250000"
+
+[mcp_servers.ai_mcp_claude]
+command = "/absolute/path/to/node"
+args = ["/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs"]
+startup_timeout_sec = 20
+tool_timeout_sec = 1300
+
+[mcp_servers.ai_mcp_claude.env]
+AI_MCP_PROVIDER = "claude"
+AI_MCP_URL = "http://127.0.0.1:8789"
+AI_MCP_ENV_FILE = "/absolute/path/to/private/ai-mcp.env"
+AI_MCP_TIMEOUT_MS = "1250000"
+```
+
+Start a new Codex session after saving. Inspect the registrations with:
+
+```sh
+codex mcp list
+codex mcp get ai_mcp_codex
+codex mcp get ai_mcp_claude
+```
+
+In the interactive CLI, use `/mcp` to inspect active servers and tools. In VS Code,
+reload the Codex session after editing the shared configuration.
+
+### Claude Code CLI and VS Code
+
+Install the Claude Code CLI if `claude` is not on your `PATH`; the VS Code extension
+alone does not install a terminal command. User-scope registrations are shared by the
+CLI and VS Code and apply across projects. Use a current CLI supporting JSON input
+from stdin (version `2.1.327` or newer). See [Claude's JSON registration guide](https://code.claude.com/docs/en/mcp#add-mcp-servers-from-json-configuration)
+and [VS Code MCP setup](https://code.claude.com/docs/en/vs-code#connect-to-external-tools-with-mcp).
+
+Create a private directory with `mkdir -p ~/.config/ai-mcp-clients`. Save the following
+as `~/.config/ai-mcp-clients/codex-service.json`, replacing the absolute paths:
+
+```json
+{
+  "type": "stdio",
+  "command": "/absolute/path/to/node",
+  "args": ["/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs"],
+  "timeout": 1300000,
+  "env": {
+    "AI_MCP_PROVIDER": "codex",
+    "AI_MCP_URL": "http://127.0.0.1:8788",
+    "AI_MCP_ENV_FILE": "/absolute/path/to/private/ai-mcp.env",
+    "AI_MCP_TIMEOUT_MS": "1250000"
+  }
+}
+```
+
+Save the second registration as `~/.config/ai-mcp-clients/claude-service.json`:
+
+```json
+{
+  "type": "stdio",
+  "command": "/absolute/path/to/node",
+  "args": ["/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs"],
+  "timeout": 1300000,
+  "env": {
+    "AI_MCP_PROVIDER": "claude",
+    "AI_MCP_URL": "http://127.0.0.1:8789",
+    "AI_MCP_ENV_FILE": "/absolute/path/to/private/ai-mcp.env",
+    "AI_MCP_TIMEOUT_MS": "1250000"
+  }
+}
+```
+
+Run these commands from a terminal **outside** a running Claude Code session:
+
+```sh
+claude mcp add-json ai_mcp_codex - --scope user < ~/.config/ai-mcp-clients/codex-service.json
+claude mcp add-json ai_mcp_claude - --scope user < ~/.config/ai-mcp-clients/claude-service.json
+claude mcp list
+claude mcp get ai_mcp_codex
+claude mcp get ai_mcp_claude
+```
+
+These commands update the user configuration in `~/.claude.json`; no key is placed in
+the command arguments. Start a new CLI/VS Code conversation and open `/mcp` to inspect
+the connections. Avoid project-scope `.mcp.json` files containing private tokens.
+
+### Verify a request and coordinate the agents
+
+Registration and tool discovery verify the local stdio connection, not the Bearer key
+or provider quota. Ask the client to call `ask_codex` or `ask_claude` with input such as:
+
+```json
+{
+  "prompt": "Review the project README and return three concrete improvements. Do not read secrets.",
+  "cwd": "/absolute/path/to/mounted/project"
+}
+```
+
+`cwd` must be an existing path under the Docker host's selected `AI_MCP_PROJECT_ROOT`,
+using the path visible inside the service container. It is not a path on a remote
+client machine. Omit `sandbox` to use the service default; see [adapter options](mcp/README.md)
+for explicit read-only modes and their limitations.
+
+To use the pair workflow shown above, tell your client: **“Ask Claude for a plan, send
+the complete plan to Codex for critique, and synthesize the revisions. Propose changes,
+have the other agent review them, then run the approved tests locally and send the
+results to both agents for analysis.”** Each provider call is independent, so the
+client must pass the relevant prior output in the next prompt. The containers return
+analysis and proposals; the client's own tools apply edits and execute tests.
+
+The examples allow a `1250000` ms adapter HTTP timeout and a larger outer tool timeout:
+`1300` seconds in Codex, `1300000` milliseconds in Claude. This exceeds Claude's
+1200-second provider deadline. Adjust these together; see [Claude's tool timeout reference](https://code.claude.com/docs/en/mcp#time-limits-on-mcp-tool-calls).
+
+| Symptom | What to check |
+| --- | --- |
+| Node/script cannot start | Absolute executable and script paths on the client machine; IDE process permissions. |
+| `401` | Correct service key and readable private ENV file; remove a stale exported `AI_MCP_TOKEN`. Restart the adapter after changing the file. |
+| Connection refused | Containers are running and `AI_MCP_URL` matches the adapter's location. |
+| `cwd_forbidden` / `403` | Use a project path inside the service's mounted root. |
+| Outer tool timeout | Keep the client deadline longer than the adapter and provider deadlines. |
+| `429` | Inspect the returned error: provider quota/rate limit or service concurrency limit. Re-registering MCP does not reset quotas. |
 
 ## Security layers and limits
 

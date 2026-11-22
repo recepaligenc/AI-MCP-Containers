@@ -315,6 +315,14 @@ public sealed class CodexRunner : IAgentRunner
             psi.ArgumentList.Add("--sandbox");
             psi.ArgumentList.Add(sandbox);
         }
+        // The host's shared config can contain our client registrations. Prevent
+        // provider calls from invoking these services again through inherited MCP.
+        // A disabled entry still needs a valid transport when no registration exists.
+        foreach (var server in new[] { "ai_mcp_codex", "ai_mcp_claude" })
+        {
+            psi.ArgumentList.Add("--config");
+            psi.ArgumentList.Add($"mcp_servers.{server}={{command=\"/bin/false\",enabled=false}}");
+        }
         if (!string.IsNullOrEmpty(model))
         {
             psi.ArgumentList.Add("--model");

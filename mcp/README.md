@@ -4,6 +4,11 @@
 AI-MCP-Containers service. It never starts containers. There are exactly two global
 provider endpoints: Codex on `127.0.0.1:8788`, Claude on `127.0.0.1:8789`.
 
+For complete Codex CLI/VS Code and Claude Code CLI/VS Code configuration examples,
+registration commands and troubleshooting, see [Connect Claude and Codex as MCP clients](../README.md#connect-claude-and-codex-as-mcp-clients).
+Both clients can call both providers. These are stdio registrations; the provider HTTP
+ports are not direct MCP HTTP endpoints.
+
 Configure the MCP launcher with these names:
 
 | Variable | Meaning |
@@ -34,6 +39,13 @@ file-edit or shell tools. Do not treat this as complete credential isolation.
 Each MCP call receives an independent conversation ID and supports cancellation.
 The supplied deployment disables provider conversation reuse; send the context needed
 for the current request in its prompt.
+
+Use the reserved stdio server IDs `ai_mcp_codex` and `ai_mcp_claude` from the setup examples.
+Provider-side Codex invocations explicitly disable those two inherited MCP entries to
+prevent recursive service calls through the shared host configuration. This does not
+disable custom MCP entries registered under other names. Do not use these reserved
+IDs for HTTP MCP entries; transport conflicts fail configuration loading. Claude uses its safe-mode
+configuration when invoked as a provider.
 
 The canonical Docker network is `ai-mcp-shared`. A client on that network can set
 `AI_MCP_URL` to `http://codex-mcp:8080` or `http://claude-mcp:8080`. Host clients can

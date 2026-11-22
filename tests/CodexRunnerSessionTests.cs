@@ -9,6 +9,27 @@ public class CodexRunnerSessionTests
     private const string ThreadId = "11111111-1111-1111-1111-111111111111";
 
     [Fact]
+    public async Task Provider_calls_disable_reserved_mcp_servers_for_fresh_and_resumed_runs()
+    {
+        using var temp = new TempTree();
+        var script = CreateFakeCodex(temp.Root, sessionBytes: 128);
+        var runner = CreateRunner(script, temp.Root, maxSessionBytes: 1024 * 1024);
+
+        Assert.True((await runner.RunAsync("first", null, null, "read-only", null, CancellationToken.None)).Ok);
+        Assert.True((await runner.RunAsync("review", null, null, "read-only", null, CancellationToken.None)).Ok);
+
+        var calls = File.ReadAllLines(Path.Combine(temp.Root, "args.log"));
+        Assert.Equal(2, calls.Length);
+        Assert.DoesNotContain("exec resume", calls[0]);
+        Assert.Contains("exec resume", calls[1]);
+        Assert.All(calls, args =>
+        {
+            Assert.Contains("--config mcp_servers.ai_mcp_codex={command=\"/bin/false\",enabled=false}", args);
+            Assert.Contains("--config mcp_servers.ai_mcp_claude={command=\"/bin/false\",enabled=false}", args);
+        });
+    }
+
+    [Fact]
     public async Task Config_default_model_is_passed_explicitly_to_the_cli()
     {
         using var temp = new TempTree();
