@@ -37,7 +37,7 @@ function fixture(t) {
 }
 
 test('a single selected read-only root is used by both services without exposing secrets in the result', t => {
-  const {config, paths} = fixture(t), result = checkConfiguration(config, paths, {lanIp: ''});
+  const {config, paths} = fixture(t), result = checkConfiguration(config, paths, {lanIps: []});
   assert.equal(result.length, 2);
   assert.ok(result.every(s => s.projectReadOnly && s.defaultCwd === s.projectRoot));
   assert.ok(!JSON.stringify(result).includes(config.services['codex-mcp'].environment.AI_MCP_TOKEN));
@@ -62,21 +62,24 @@ for (const [name, mutate, message] of [
 ]) {
   test('rejects ' + name + ' even in a local Compose override', t => {
     const {config, paths} = fixture(t); mutate(config.services['codex-mcp']);
-    assert.throws(() => checkConfiguration(config, paths, {lanIp: ''}), message);
+    assert.throws(() => checkConfiguration(config, paths, {lanIps: []}), message);
   });
 }
 
 const lanIp = '192.168.1.20';
 const interfaces = {eth0: [{address: lanIp, internal: false}]};
-test('LAN access adds a selected private host address while retaining localhost', t => {
+test('LAN access adds every selected private host address while retaining localhost', t => {
   const {config, paths} = fixture(t);
+  const lanIps = ['10.0.0.4', lanIp];
+  const selectedInterfaces = {...interfaces, wlan0: [{address: '10.0.0.4', internal: false}]};
   for (const service of Object.values(config.services))
-    service.ports.push({...service.ports[0], host_ip: lanIp});
-  const result = checkConfiguration(config, paths, {lanIp, interfaces});
-  assert.ok(result.every(service => !service.localhostOnly && service.lanAddress === lanIp));
-  assert.throws(() => checkConfiguration(config, paths, {lanIp: '', interfaces}), /localhost mapping/);
+    for (const ip of lanIps) service.ports.push({...service.ports[0], host_ip: ip});
+  const result = checkConfiguration(config, paths, {lanIps, interfaces: selectedInterfaces});
+  assert.ok(result.every(service => !service.localhostOnly && JSON.stringify(service.lanAddresses) === JSON.stringify(lanIps)));
+  assert.throws(() => checkConfiguration(config, paths, {lanIps: [], interfaces: selectedInterfaces}), /localhost mapping/);
+  assert.throws(() => checkConfiguration(config, paths, {lanIps: [lanIp, lanIp], interfaces}), /Duplicate LAN/);
   config.services['codex-mcp'].ports.shift();
-  assert.throws(() => checkConfiguration(config, paths, {lanIp, interfaces}), /localhost mapping/);
+  assert.throws(() => checkConfiguration(config, paths, {lanIps, interfaces: selectedInterfaces}), /localhost mapping/);
 });
 
 test('wildcard, public, nonlocal and Docker bridge addresses cannot be selected as LAN bindings', () => {
@@ -90,5 +93,5 @@ test('a selected provider path still cannot expose the entire host', t => {
   const {config, paths} = fixture(t);
   paths.codexBinary = '/';
   config.services['codex-mcp'].volumes[1].source = '/';
-  assert.throws(() => checkConfiguration(config, paths, {lanIp: ''}), /entire host or home/);
+  assert.throws(() => checkConfiguration(config, paths, {lanIps: []}), /entire host or home/);
 });

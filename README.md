@@ -22,7 +22,7 @@ Copy `.env.example` to the ignored private `.env` and fill in these settings:
 | `AI_MCP_CODEX_EXT_BIN` | Dedicated stable Codex binary directory, normally `${HOME}/.codex-ext-bin`. |
 | `AI_MCP_CLAUDE_EXTENSIONS` | Host VS Code extensions directory, normally `${HOME}/.vscode/extensions`. |
 | `AI_MCP_MAX_CONCURRENT_REQUESTS` | Maximum active requests per provider; default `6`. |
-| `AI_MCP_LAN_IP` | Optional private IPv4 address assigned to this host. Leave empty for localhost access only. |
+| `AI_MCP_LAN_IP` | `auto` discovers the host's physical private IPv4 addresses at startup. Set one host IPv4 to restrict access, or leave empty to disable LAN access. |
 
 Create the shared network once, prepare Codex's stable binary copy, then start:
 
@@ -34,8 +34,9 @@ docker network create ai-mcp-shared
 
 Skip network creation if `ai-mcp-shared` already exists. The startup wrapper validates
 the resolved configuration before applying it. It preserves an existing ignored
-`docker-compose.override.yml` and automatically includes `docker-compose.lan.yml`
-when `AI_MCP_LAN_IP` is set. Missing bind directories are never created automatically.
+`docker-compose.override.yml` and generates the LAN mappings from the selected host
+addresses. The same resolved address list is checked and applied in that invocation.
+Missing bind directories are never created automatically.
 
 ## Network access
 
@@ -43,12 +44,27 @@ when `AI_MCP_LAN_IP` is set. Missing bind directories are never created automati
 | --- | --- | --- |
 | This host | `http://127.0.0.1:8788` | `http://127.0.0.1:8789` |
 | Docker container on `ai-mcp-shared` | `http://codex-mcp:8080` | `http://claude-mcp:8080` |
-| LAN, when enabled | `http://<AI_MCP_LAN_IP>:8788` | `http://<AI_MCP_LAN_IP>:8789` |
+| LAN, for each selected host address | `http://<host-LAN-IP>:8788` | `http://<host-LAN-IP>:8789` |
 
 Attach a client container to the external `ai-mcp-shared` network in its own Compose
 configuration. LAN access supplements localhost access; existing local MCP clients
 keep working. The preflight rejects wildcard/public bindings, Docker bridge addresses,
 addresses not assigned to this host, and mappings that remove localhost access.
+
+The example enables `AI_MCP_LAN_IP=auto`. On a Linux host using a local Docker Unix
+socket, startup discovers RFC1918 IPv4 addresses on active physical network interfaces,
+including Ethernet and Wi-Fi. Docker bridges, VPN/tunnel and other virtual interfaces
+are excluded. Each discovered address receives its own port mappings; no wildcard
+listener is added. TCP/SSH Docker endpoints and Docker Desktop are rejected in automatic
+mode because local interface discovery cannot determine their daemon host's addresses.
+Do not forward a remote daemon through a local Unix socket: automatic discovery assumes
+the daemon runs on the same Linux machine as this checkout.
+If no suitable address is found, only localhost and Docker-network access remain.
+
+Automatic mode can expose the service on multiple connected private networks. To
+choose one, set a single assigned private IPv4 instead; an empty value disables LAN
+access. Addresses are discovered at startup, not continuously: run `./run-docker.sh`
+again after a DHCP or network change to update the container port mappings.
 
 Send `Authorization: Bearer <AI_MCP_TOKEN>` on every API request, including requests
 from Docker peers and LAN clients. `/health` and the static UI are public. The UI

@@ -37,8 +37,11 @@ for the current request in its prompt.
 
 The canonical Docker network is `ai-mcp-shared`. A client on that network can set
 `AI_MCP_URL` to `http://codex-mcp:8080` or `http://claude-mcp:8080`. Host clients can
-keep the localhost defaults. When the service enables `AI_MCP_LAN_IP`, remote clients
-can use that host address with port `8788` or `8789` and their explicit `AI_MCP_TOKEN`.
+keep the localhost defaults. With `AI_MCP_LAN_IP=auto`, service startup discovers the
+local Linux Docker host's physical private IPv4 addresses. Remote clients can use any
+selected host address with port `8788` or `8789` and their explicit `AI_MCP_TOKEN`.
+Set one private IPv4 to restrict LAN access or leave the setting empty to disable it.
+Run `./run-docker.sh` again after host address changes; discovery is not continuous.
 The key is required on every network; HTTP requires a TLS proxy or private tunnel
 when the network is untrusted.
 The HTTP service additionally limits total simultaneous requests across all IDs.

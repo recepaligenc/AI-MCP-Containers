@@ -3,22 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {isIPv4} from 'node:net';
-import {hostPaths, lanAddress} from './host-paths.mjs';
-import {composeArguments} from './compose-options.mjs';
+import {hostPaths} from './host-paths.mjs';
+import {composePlan, runCompose} from './compose-options.mjs';
+import {checkLanAddress} from './lan-addresses.mjs';
+export {checkLanAddress} from './lan-addresses.mjs';
 
-export function checkLanAddress(value, interfaces = os.networkInterfaces()) {
-  if (!isIPv4(value)) throw Error('Select a private LAN IPv4 address.');
-  const [a, b] = value.split('.').map(Number);
-  if (!(a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)))
-    throw Error('Select a private LAN IPv4 address; wildcard and public bindings are forbidden.');
-  const local = Object.entries(interfaces).some(([name, entries]) =>
-    !/^(lo|docker|br-|veth|virbr)/.test(name) && entries.some(entry => entry.address === value && !entry.internal));
-  if (!local) throw Error('The selected LAN IPv4 address must belong to a host network interface.');
-}
-
-export function checkConfiguration(config, selectedPaths = hostPaths(), {lanIp = lanAddress(), interfaces} = {}) {
-  if (lanIp) checkLanAddress(lanIp, interfaces);
+export function checkConfiguration(config, selectedPaths = hostPaths(), {lanIps = [], interfaces} = {}) {
+  if (new Set(lanIps).size !== lanIps.length) throw Error('Duplicate LAN bindings are forbidden.');
+  for (const ip of lanIps) checkLanAddress(ip, interfaces);
   const names = Object.keys(config.services || {}).sort();
   if (names.join(',') !== 'claude-mcp,codex-mcp') throw Error('Exactly the two provider services are required.');
   const summaries = [];
@@ -60,12 +52,12 @@ export function checkConfiguration(config, selectedPaths = hostPaths(), {lanIp =
       fail('A read-only runtime filesystem and no-new-privileges are required.');
     if (!service.cap_drop?.includes('ALL') || !(Number(service.mem_limit) > 0) ||
       !(Number(service.cpus) > 0) || !(Number(service.pids_limit) > 0)) fail('Runtime resource/capability limits are required.');
-    const expectedHosts = lanIp ? ['127.0.0.1', lanIp] : ['127.0.0.1'];
+    const expectedHosts = ['127.0.0.1', ...lanIps];
     const ports = service.ports || [];
     if (ports.length !== expectedHosts.length || expectedHosts.some(ip => ports.filter(port => port.host_ip === ip).length !== 1) ||
       ports.some(port => String(port.published) !== (codex ? '8788' : '8789') || port.target !== 8080 ||
         (port.protocol && port.protocol !== 'tcp')))
-      fail('Keep the localhost mapping and only the selected private LAN mapping on the provider port.');
+      fail('Keep the localhost mapping and only the selected private LAN mappings on the provider port.');
     const projectBinds = (service.volumes || []).filter(v => v.type === 'bind' && v.target === root);
     if (projectBinds.length !== 1 || projectBinds[0].source !== root || projectBinds[0].read_only !== true)
       fail('The project bind must use the selected path and be read-only.');
@@ -96,7 +88,7 @@ export function checkConfiguration(config, selectedPaths = hostPaths(), {lanIp =
     }
     if (seen.size !== allowedTargets.size) fail('Required project or provider mounts are missing.');
     summaries.push({service: name, projectRoot: root, projectReadOnly: true,
-      defaultCwd: root, authenticationRequired: true, localhostOnly: !lanIp, lanAddress: lanIp || null});
+      defaultCwd: root, authenticationRequired: true, localhostOnly: !lanIps.length, lanAddresses: lanIps});
   }
   return summaries;
 }
@@ -104,9 +96,15 @@ export function checkConfiguration(config, selectedPaths = hostPaths(), {lanIp =
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-    const config = JSON.parse(execFileSync('docker', ['compose', ...composeArguments(), 'config', '--format', 'json'],
-      {cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}));
-    console.log(JSON.stringify({passed: true, services: checkConfiguration(config)}, null, 2));
+    if (process.argv[2] && process.argv[2] !== '--up') throw Error('Use --up to start the validated services.');
+    const plan = composePlan();
+    const config = JSON.parse(execFileSync('docker', ['compose', ...plan.args, 'config', '--format', 'json'],
+      {cwd: root, input: plan.input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe']}));
+    console.log(JSON.stringify({passed: true, lanSelection: plan.selection,
+      services: checkConfiguration(config, hostPaths(), {lanIps: plan.lanIps})}, null, 2));
+    if (plan.selection === 'auto' && !plan.lanIps.length)
+      console.error('No active physical private LAN IPv4 addresses found; localhost and Docker-network access remain available.');
+    if (process.argv[2] === '--up') process.exitCode = runCompose(plan, ['up', '-d', ...process.argv.slice(3)]);
   } catch (error) {
     // Compose output can contain expanded credentials. Never print stdout/stderr from it.
     console.error(error.stdout || error.stderr ? 'Compose configuration could not be resolved. Check the private .env file.' : error.message);
