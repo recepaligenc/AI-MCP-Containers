@@ -544,3 +544,11 @@ The practical reasons to evaluate this model are critical planning before a larg
 patch, earlier supported security/performance findings, smaller changes, explicit
 UI approval and avoiding unnecessary repeat tests. These are intended benefits;
 there are no guaranteed savings or measured defect-reduction percentages.
+
+## License
+
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md):
+free to use for noncommercial purposes as that license defines them. Commercial use
+needs a separate license from the author; ask through https://github.com/recepaligenc.
+
+Required Notice: Copyright 2026 Recep Ali Genc (https://github.com/recepaligenc)
