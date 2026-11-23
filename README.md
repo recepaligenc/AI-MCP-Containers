@@ -5,7 +5,7 @@ one writes, the other reviews. With the collaboration rules installed, they crit
 the plan before implementation and the change and its test evidence before calling
 the work done. They can iterate across planning, coding and testing. You stay the lead.
 
-![Full Cross-Check animation: self-review, Claude Code and Codex collaborating, a deliberately planted bug, earlier review and intended benefits.](docs/assets/cross-check-pair.gif)
+<a href="docs/assets/cross-check.mp4"><img src="docs/assets/cross-check-full-29s.gif" width="400" alt="Full 29.8-second Cross-Check animation: self-review, Claude Code and Codex collaborating, a deliberately planted bug, earlier review and intended benefits. Click to open the original video."></a>
 
 [Watch the original 29.8-second video](docs/assets/cross-check.mp4) ·
 [View the static illustration](docs/assets/cross-check-pair.png).
