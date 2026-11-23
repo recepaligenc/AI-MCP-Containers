@@ -5,9 +5,12 @@ one writes, the other reviews. With the collaboration rules installed, they crit
 the plan before implementation and the change and its test evidence before calling
 the work done. They can iterate across planning, coding and testing. You stay the lead.
 
-![Claude Code as writer and Codex as reviewer exchange work across planning, coding and testing. The host client edits and runs tests; the reviewer advises at checkpoints.](docs/assets/cross-check-pair.gif)
+![Full Cross-Check animation: self-review, Claude Code and Codex collaborating, a deliberately planted bug, earlier review and intended benefits.](docs/assets/cross-check-pair.gif)
 
+[Watch the original 29.8-second video](docs/assets/cross-check.mp4) ·
 [View the static illustration](docs/assets/cross-check-pair.png).
+The GIF follows the complete original animation, without cuts or timing changes.
+The bug example is staged; the savings illustration describes an aim, not measured results.
 Roles can swap with the leading client; the second agent reviews at checkpoints.
 The illustration shows collaboration, not automatic approval or release.
 
