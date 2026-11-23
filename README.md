@@ -549,6 +549,6 @@ there are no guaranteed savings or measured defect-reduction percentages.
 
 This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md):
 free to use for noncommercial purposes as that license defines them. Commercial use
-needs a separate license from the author; ask through https://github.com/recepaligenc.
+needs a separate license from Qenta Ltd; write to recep@qenta.ai.
 
-Required Notice: Copyright 2026 Recep Ali Genc (https://github.com/recepaligenc)
+Required Notice: Copyright 2026 Qenta Ltd (https://github.com/recepaligenc)
