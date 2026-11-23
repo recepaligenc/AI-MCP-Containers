@@ -1,0 +1,98 @@
+name: ai-mcp-containers
+
+# Alternative to docker-compose.yml, not an override. Exactly the same two endpoints.
+x-service: &service
+  build:
+    context: .
+    target: desktop
+  image: ai-mcp-desktop:latest
+  restart: unless-stopped
+  user: "1000:1000"
+  read_only: true
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  mem_limit: 2g
+  cpus: 2.0
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+  healthcheck:
+    test: [CMD, curl, --fail, --silent, --show-error, --max-time, "3", http://127.0.0.1:8080/health]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+
+x-environment: &environment
+  AI_MCP_TOKEN: ${AI_MCP_TOKEN:?generate AI_MCP_TOKEN in .env.desktop}
+  AI_MCP_ALLOWED_ROOTS: /workspace
+  AI_MCP_DEFAULT_CWD: /workspace
+  AI_MCP_READ_ONLY_PROJECTS: "true"
+  AI_MCP_TIMEOUT_SECONDS: "1200"
+  AI_MCP_MAX_CONCURRENT_REQUESTS: ${AI_MCP_MAX_CONCURRENT_REQUESTS:-6}
+  AI_MCP_MAX_OUTPUT_BYTES: ${AI_MCP_MAX_OUTPUT_BYTES:-8388608}
+  AI_MCP_MAX_PROMPT_CHARS: ${AI_MCP_MAX_PROMPT_CHARS:-1000000}
+  HOME: /home/agent
+
+x-project: &project
+  type: bind
+  source: ${AI_MCP_PROJECT_ROOT:?select AI_MCP_PROJECT_ROOT in .env.desktop}
+  target: /workspace
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  codex-mcp:
+    <<: *service
+    container_name: codex-mcp
+    ports: ["127.0.0.1:8788:8080"]
+    environment:
+      <<: *environment
+      AI_MCP_PROVIDERS: codex
+      AI_MCP_PROVIDER: codex
+      AI_MCP_CODEX_BIN: /opt/providers/bin/codex
+      AI_MCP_CODEX_HOME: /home/agent/.codex
+      AI_MCP_SANDBOX: danger-full-access
+      AI_MCP_CODEX_REUSE_SESSION: "false"
+      AI_MCP_CODEX_EPHEMERAL: "true"
+    volumes:
+      - *project
+      - type: volume
+        source: desktop-codex-home
+        target: /home/agent
+    networks:
+      ai-mcp-shared:
+        aliases: [codex-bridge]
+
+  claude-mcp:
+    <<: *service
+    container_name: claude-mcp
+    ports: ["127.0.0.1:8789:8080"]
+    environment:
+      <<: *environment
+      AI_MCP_PROVIDERS: claude
+      AI_MCP_PROVIDER: claude
+      AI_MCP_CLAUDE_BIN: /opt/providers/bin/claude
+      AI_MCP_CLAUDE_HOME: /home/agent
+      CLAUDE_CODE_TMPDIR: /tmp
+      AI_MCP_SANDBOX: read-only
+      AI_MCP_CLAUDE_REUSE_SESSION: "false"
+      AI_MCP_CLAUDE_NO_SESSION_PERSISTENCE: "true"
+    volumes:
+      - *project
+      - type: volume
+        source: desktop-claude-home
+        target: /home/agent
+    networks:
+      ai-mcp-shared:
+        aliases: [claude-bridge]
+
+volumes:
+  desktop-codex-home:
+  desktop-claude-home:
+
+networks:
+  ai-mcp-shared:
+    name: ai-mcp-shared
+    external: true

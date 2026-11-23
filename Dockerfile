@@ -11,8 +11,17 @@ RUN dotnet restore AiMcpContainers.csproj
 # Publish the web app.
 RUN dotnet publish AiMcpContainers.csproj -c Release -o /app --no-restore
 
-# ---- runtime stage ----
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+# Desktop hosts supply no Linux extension executables. Keep these CLI versions
+# reproducible and independent of the host VS Code installation.
+FROM node:22-bookworm-slim AS desktop-providers
+ARG CODEX_VERSION=0.171.0
+ARG CLAUDE_VERSION=2.1.330
+RUN npm install --global --prefix /opt/providers \
+      "@openai/codex@${CODEX_VERSION}" "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
+ && npm cache clean --force
+
+# ---- shared runtime stage ----
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime-base
 WORKDIR /app
 
 # ca-certificates: TLS to the OpenAI/Anthropic endpoints.
@@ -59,3 +68,21 @@ ENV DOTNET_EnableWriteXorExecute=0
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "AiMcpContainers.dll"]
+
+# Linux containers on Windows/macOS: persistent homes contain only account state,
+# not CLI installations. Fresh named volumes inherit this non-root ownership.
+FROM runtime-base AS desktop
+COPY --from=desktop-providers /usr/local/bin/node /usr/local/bin/node
+COPY --from=desktop-providers /opt/providers /opt/providers
+RUN groupadd --gid 1000 agent \
+ && useradd --uid 1000 --gid 1000 --create-home agent \
+ && install -d -m 0700 -o 1000 -g 1000 /home/agent/.codex /home/agent/.claude \
+ && printf '%s\n' 'cli_auth_credentials_store = "file"' > /home/agent/.codex/config.toml \
+ && chown 1000:1000 /home/agent/.codex/config.toml
+ENV HOME=/home/agent
+ENV CODEX_HOME=/home/agent/.codex
+ENV DISABLE_AUTOUPDATER=1
+USER 1000:1000
+
+# Preserve the default Linux extension-based image for existing builds.
+FROM runtime-base AS runtime

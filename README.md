@@ -23,6 +23,11 @@ authentication; all callers share this installation's accounts and subscription 
 
 ## Configure and start
 
+For **local Windows or macOS services**, use the
+[Docker Desktop setup](docs/docker-desktop.md). It installs Linux CLIs in the image
+and uses separate account volumes, without host extension binaries.
+The instructions below describe the existing Linux host integration.
+
 Use a Linux host with Docker Compose, Node.js, rsync and compatible Linux provider
 binaries from VS Code. Sign into the native Codex and Claude Code CLIs on the host.
 Codex's updater supports Linux x64; Claude's launcher supports Linux x64 and arm64.

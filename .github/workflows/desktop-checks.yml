@@ -1,0 +1,33 @@
+name: Desktop setup portability
+
+on:
+  push:
+    paths:
+      - 'scripts/desktop.mjs'
+      - 'scripts/desktop.test.mjs'
+      - '.github/workflows/desktop-checks.yml'
+  pull_request:
+    paths:
+      - 'scripts/desktop.mjs'
+      - 'scripts/desktop.test.mjs'
+      - '.github/workflows/desktop-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-paths:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record verification scope
+        run: node -e "console.log(JSON.stringify({behavior:'Desktop paths, argv and preflight', platform:process.platform, node:process.version, priorEvidence:'No matching evidence available on this native runner', reason:'Desktop setup source or workflow changed', selection:'scripts/desktop.test.mjs'}))"
+      - name: Verify changed Desktop setup paths and guards
+        run: node --test scripts/desktop.test.mjs
