@@ -5,38 +5,45 @@ The Desktop deployment builds Linux CLIs for the Docker engine's amd64 or arm64
 architecture. It does not execute Windows/macOS VS Code extension binaries.
 Both services run locally; a separate Linux server is unnecessary.
 
-Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
-or [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/).
-On Windows select the WSL2 backend and Linux-container mode. On macOS use the
-installer for your Intel or Apple Silicon Mac. Allow Docker access to your selected
-project directory when prompted. The host Node process runs the setup wrapper and MCP adapter.
+Allow Docker access to your selected project directory when prompted. The host
+Node process runs the setup wrapper and MCP adapter.
 
 This deployment is an alternative to the Linux extension-based deployment. Both use
 the same project name, service names and ports; run one deployment on a machine.
 Do not combine the two Compose files as overrides. The existing Linux installation
 and its ignored overrides remain separate from these commands.
 
-## Configure
+## Windows
 
-Install Git, clone the repository and enter it. These commands work in PowerShell
-and macOS Terminal:
+Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/),
+select the WSL2 backend and Linux-container mode, and install Git and Node.js 22 or
+later on the Windows host. In PowerShell, clone the repository and copy the template:
+
+```powershell
+git clone https://github.com/recepaligenc/AI-MCP-Containers.git
+cd AI-MCP-Containers
+Copy-Item .env.desktop.example .env.desktop
+```
+
+Continue with [shared configuration](#shared-configuration), then
+[build, authenticate and start](#build-authenticate-and-start).
+
+## macOS
+
+Install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)
+for your Intel or Apple Silicon Mac, plus Git and Node.js 22 or later on the host.
+In macOS Terminal, clone the repository and copy the template:
 
 ```sh
 git clone https://github.com/recepaligenc/AI-MCP-Containers.git
 cd AI-MCP-Containers
-```
-
-Copy the public template:
-
-```powershell
-# Windows PowerShell
-Copy-Item .env.desktop.example .env.desktop
-```
-
-```sh
-# macOS Terminal
 cp .env.desktop.example .env.desktop
 ```
+
+Continue with [shared configuration](#shared-configuration), then
+[build, authenticate and start](#build-authenticate-and-start).
+
+## Shared configuration
 
 Generate a private service key, then put it in `.env.desktop` as `AI_MCP_TOKEN`:
 

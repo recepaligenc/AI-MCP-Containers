@@ -23,17 +23,35 @@ authentication; all callers share this installation's accounts and subscription 
 
 ## Configure and start
 
-For **local Windows or macOS services**, use the
-[Docker Desktop setup](docs/docker-desktop.md). It installs Linux CLIs in the image
-and uses separate account volumes, without host extension binaries.
+Choose your operating system below. After starting the services, continue with the
+[shared MCP and rule-installation steps](docs/getting-started.md#4-connect-each-native-client-once).
 
-| Service host | Configure | Build / authenticate / start |
-| --- | --- | --- |
-| Windows / macOS | Copy `.env.desktop.example` to `.env.desktop` | Follow `node scripts/desktop.mjs check`, `build`, `login codex`, `login claude`, `up` in the [Desktop guide](docs/docker-desktop.md). |
-| Linux | Copy `.env.example` to `.env` | Use the Linux steps below. |
+### Windows
 
-The instructions below describe the existing Linux host integration. For the common
-MCP and rule-installation steps, see the [installation guide](docs/getting-started.md).
+Use the [Windows installation](docs/docker-desktop.md#windows) with Docker Desktop's
+WSL2 backend and Linux containers. Configure `.env.desktop`, then use
+`node scripts/desktop.mjs` to build, sign in and start the services.
+
+### macOS
+
+Use the [macOS installation](docs/docker-desktop.md#macos) with Docker Desktop for
+Intel or Apple Silicon. Configure `.env.desktop`, then use `node scripts/desktop.mjs`
+to build, sign in and start the services. Linux CLIs and separate account volumes
+are provided inside Docker for both Windows and macOS.
+
+### Ubuntu
+
+Follow the [Ubuntu installation](docs/getting-started.md#ubuntu). It uses Docker
+Engine, `.env` and the Linux host extension binaries. The shared Linux configuration
+and startup commands are also shown below.
+
+### Other Linux distributions
+
+Follow the [Linux installation](docs/getting-started.md#other-linux-distributions)
+with Docker Engine and compatible host extension binaries. It uses the same `.env`
+and shell commands as Ubuntu.
+
+### Shared Ubuntu and Linux configuration
 
 Use a Linux host with Docker Compose, Node.js, rsync and compatible Linux provider
 binaries from VS Code. Sign into the native Codex and Claude Code CLIs on the host.

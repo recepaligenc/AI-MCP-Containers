@@ -7,15 +7,37 @@ combine your subscriptions or transfer credits between providers.
 
 Choose the service installation for your operating system first:
 
-| Service host | Setup path | Private environment | Service commands |
-| --- | --- | --- | --- |
-| Windows / macOS with Docker Desktop | [Docker Desktop guide](docker-desktop.md) | `.env.desktop` | `node scripts/desktop.mjs check`, `build`, `login codex`, `login claude`, `up` |
-| Linux with host extension binaries | Steps 1–3 below | `.env` | `./refresh-codex-bin.sh`, `./run-docker.sh --build` |
+## Windows
 
-**Windows/macOS:** complete the Desktop guide's configuration, build, account login
-and startup, then resume at **step 4** here. Do not run the Linux shell scripts,
-configure host UID/GID values or mount native Windows/macOS extension binaries.
-Desktop providers use Linux CLIs inside the image and account state in Docker volumes.
+Follow the [Windows setup](docker-desktop.md#windows) using Docker Desktop's WSL2
+backend, Linux containers and native Node.js. Configure `.env.desktop`, then complete
+the Desktop guide's build, account login and startup commands. Continue at
+[step 4](#4-connect-each-native-client-once) below.
+
+## macOS
+
+Follow the [macOS setup](docker-desktop.md#macos) using Docker Desktop for your Intel
+or Apple Silicon Mac and native Node.js. Configure `.env.desktop`, then complete the
+Desktop guide's build, account login and startup commands. Continue at
+[step 4](#4-connect-each-native-client-once) below.
+
+Both Desktop installations use Linux CLIs inside the image and account state in
+Docker volumes. Their setup does not use the Linux shell scripts, host UID/GID
+settings or native Windows/macOS extension binaries as service executables.
+
+## Ubuntu
+
+Use Docker Engine, Docker Compose, Node.js, `rsync` and compatible Linux provider
+extension binaries on the Ubuntu host. Follow [steps 1–3](#1-prepare-your-computer-linux)
+below to configure `.env` and start the services, then continue at step 4.
+
+## Other Linux distributions
+
+Use Docker Engine, Docker Compose, Node.js, `rsync` and compatible Linux provider
+extension binaries on your Linux host. Follow the same
+[steps 1–3](#1-prepare-your-computer-linux) as Ubuntu, then continue at step 4.
+The host binaries must match your Linux architecture; see the
+[Linux prerequisites](../README.md#shared-ubuntu-and-linux-configuration).
 
 ## 1. Prepare your computer (Linux)
 
