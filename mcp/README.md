@@ -26,6 +26,7 @@ Configure the MCP launcher with these names:
 | `AI_MCP_DEFAULT_CWD` | Optional client-side working-directory override |
 | `AI_MCP_REQUIRE_CWD` | Require callers to supply a working directory |
 | `AI_MCP_TIMEOUT_MS` | Positive request timeout; default 300000 milliseconds |
+| `AI_MCP_MAX_PROMPT_CHARS` | Prompt limit in UTF-16 code units; default `1000000`, integer range `1..8000000`. Process environment overrides the selected `.env`. |
 
 The server-side Compose configuration has one project path: `AI_MCP_PROJECT_ROOT`.
 It is mounted read-only in both containers. The service defaults to this directory;
@@ -43,6 +44,12 @@ file-edit or shell tools. Do not treat this as complete credential isolation.
 Each MCP call receives an independent conversation ID and supports cancellation.
 The supplied deployment disables provider conversation reuse; send the context needed
 for the current request in its prompt.
+
+The adapter and HTTP service use the same prompt limit and reject oversized input
+without truncation. Set `AI_MCP_MAX_PROMPT_CHARS` in the shared `.env` and recreate
+services/restart MCP clients after changing it. Remote adapters need the same value
+in their launcher environment or selected `.env`. The model's token/context window
+is a separate limit; increasing the transport limit does not increase model capacity.
 
 Use the reserved stdio server IDs `ai_mcp_codex` and `ai_mcp_claude` from the setup examples.
 Provider-side Codex invocations explicitly disable those two inherited MCP entries to

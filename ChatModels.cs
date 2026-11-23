@@ -59,7 +59,8 @@ public readonly record struct ValidationResult(
 
 public static class ChatRequestValidator
 {
-    public const int MaxPromptLength = 100_000;
+    public const int MaxPromptLength = 1_000_000;
+    public const int MaxConfiguredPromptLength = 8_000_000;
 
     // Sandboxes a CLIENT may request over HTTP. Deliberately excludes
     // "danger-full-access": an untrusted request must never be able to make codex run
@@ -104,7 +105,8 @@ public static class ChatRequestValidator
         IReadOnlyList<string>? allowedWriteRoots = null,
         string? defaultCwd = null,
         bool codexInnerSandboxAvailable = true,
-        bool readOnlyProjects = false)
+        bool readOnlyProjects = false,
+        int maxPromptLength = MaxPromptLength)
     {
         ErrorResponse Err(string msg, string code) => new() { Error = msg, Code = code };
         ValidationResult Bad(int status, string msg, string code) =>
@@ -117,8 +119,8 @@ public static class ChatRequestValidator
         if (string.IsNullOrWhiteSpace(prompt))
             return Bad(400, "Field 'prompt' is required and must be non-empty.", "missing_prompt");
 
-        if (prompt.Length > MaxPromptLength)
-            return Bad(400, $"Field 'prompt' exceeds {MaxPromptLength} characters.", "prompt_too_long");
+        if (prompt.Length > maxPromptLength)
+            return Bad(400, $"Field 'prompt' exceeds {maxPromptLength} characters.", "prompt_too_long");
 
         // Provider: whitelist only.
         var provider = defaultProvider;

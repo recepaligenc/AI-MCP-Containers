@@ -5,7 +5,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -18,6 +19,7 @@ let server, baseUrl, lastRequest, requestCount = 0;
 
 before(async () => {
   server = http.createServer((req, res) => {
+    req.setEncoding('utf8');
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
@@ -122,6 +124,64 @@ test('tools/list advertises ask_codex with a prompt input', async () => {
   // Callers must be told to leave it unset, and what a refusal looks like.
   assert.match(tools[0].inputSchema.properties.sandbox.description, /Leave it unset/);
   assert.match(tools[0].inputSchema.properties.sandbox.description, /sandbox_unavailable/);
+});
+
+test('large context is forwarded intact up to the default limit', async () => {
+  const prompt = 'ı'.repeat(999_998) + '😀';
+  const got = await drive([{ jsonrpc: '2.0', id: 101, method: 'tools/call',
+    params: { name: 'ask_codex', arguments: { prompt } } }],
+    { extra: { AI_MCP_MAX_PROMPT_CHARS: undefined, AI_MCP_ENV_FILE: resolve(HERE, 'missing-context.env') } });
+  assert.equal(got.get(101).result.isError, undefined);
+  assert.equal(lastRequest.body.prompt.length, prompt.length);
+  assert.ok(lastRequest.body.prompt === prompt, 'large Unicode prompt must arrive unchanged');
+});
+
+test('context above the default limit is rejected without an HTTP request', async () => {
+  const before = requestCount;
+  const got = await drive([{ jsonrpc: '2.0', id: 102, method: 'tools/call',
+    params: { name: 'ask_codex', arguments: { prompt: 'x'.repeat(1_000_001) } } }],
+    { extra: { AI_MCP_MAX_PROMPT_CHARS: undefined, AI_MCP_ENV_FILE: resolve(HERE, 'missing-context.env') } });
+  assert.equal(got.get(102).result.isError, true);
+  assert.match(got.get(102).result.content[0].text, /1000000/);
+  assert.equal(requestCount, before);
+});
+
+test('context limit uses the shared env file and process override with UTF-16 boundaries', async t => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'ai-mcp-context-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = resolve(dir, 'fixture.env');
+  writeFileSync(file, 'AI_MCP_MAX_PROMPT_CHARS=4\n');
+  const frame = prompt => ({ jsonrpc: '2.0', id: 103, method: 'tools/call',
+    params: { name: 'ask_codex', arguments: { prompt } } });
+  const extra = { AI_MCP_ENV_FILE: file, AI_MCP_MAX_PROMPT_CHARS: undefined };
+  const good = await drive([frame('ab😀')], { extra });
+  assert.equal(good.get(103).result.isError, undefined);
+  assert.equal(lastRequest.body.prompt, 'ab😀');
+  const before = requestCount;
+  const bad = await drive([frame('abc😀')], { extra });
+  assert.equal(bad.get(103).result.isError, true);
+  assert.equal(requestCount, before);
+  const override = await drive([frame('abc😀')], { extra: { ...extra, AI_MCP_MAX_PROMPT_CHARS: '5' } });
+  assert.equal(override.get(103).result.isError, undefined);
+  assert.equal(lastRequest.body.prompt, 'abc😀');
+  const listed = await drive([{ jsonrpc: '2.0', id: 104, method: 'tools/list' }], { extra });
+  assert.match(listed.get(104).result.tools[0].inputSchema.properties.prompt.description, /1\.\.4 UTF-16/);
+});
+
+test('invalid context limit fails adapter startup', async () => {
+  for (const value of ['', '0', '-1', '1.5', '8000001', 'invalid']) {
+    const child = spawn(process.execPath, [SHIM], {
+      env: { ...process.env, AI_MCP_MAX_PROMPT_CHARS: value }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    const code = await new Promise((resolveP, reject) => {
+      child.on('error', reject);
+      child.on('close', resolveP);
+    });
+    assert.equal(code, 1);
+    assert.match(stderr, /AI_MCP_MAX_PROMPT_CHARS/);
+  }
 });
 
 test('a sandbox the bridge cannot honour reaches the caller as a typed error', async () => {

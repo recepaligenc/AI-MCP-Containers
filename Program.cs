@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 //                        for read-only and workspace-write) | available | unavailable —
 //                        whether codex's own read-only/workspace-write sandbox can start here
 // AI_MCP_TIMEOUT_SECONDS  per-request timeout (default 300)
+// AI_MCP_MAX_PROMPT_CHARS  maximum UTF-16 prompt length (default 1000000; maximum 8000000)
 // AI_MCP_CODEX_REUSE_SESSION  true to resume the previous Codex session for matching cwd/model/sandbox
 // AI_MCP_CODEX_EPHEMERAL  true to avoid persisting fresh Codex session files when not resuming
 // AI_MCP_CODEX_IGNORE_SESSION_CONTEXT  prepend an instruction to ignore earlier resumed-session content
@@ -40,6 +41,12 @@ string? token = cfg["AI_MCP_TOKEN"] ?? cfg["AiMcp:Token"];
 ServiceSecurity.RequireToken(token);
 bool readOnlyProjects = ParseBool(cfg["AI_MCP_READ_ONLY_PROJECTS"] ?? cfg["AiMcp:ReadOnlyProjects"], defaultValue: true);
 int maxConcurrency = int.TryParse(cfg["AI_MCP_MAX_CONCURRENT_REQUESTS"], out var mc) && mc > 0 ? Math.Min(mc, 32) : 6;
+int maxPromptLength = ChatRequestValidator.MaxPromptLength;
+if (cfg["AI_MCP_MAX_PROMPT_CHARS"] is { } promptLimit
+    && (!int.TryParse(promptLimit, System.Globalization.NumberStyles.None,
+        System.Globalization.CultureInfo.InvariantCulture, out maxPromptLength)
+        || maxPromptLength < 1 || maxPromptLength > ChatRequestValidator.MaxConfiguredPromptLength))
+    throw new InvalidOperationException("AI_MCP_MAX_PROMPT_CHARS must be an integer between 1 and 8000000.");
 string defaultCwd = cfg["AI_MCP_DEFAULT_CWD"] ?? cfg["AiMcp:DefaultCwd"]
     ?? Directory.GetCurrentDirectory();
 string defaultSandbox = cfg["AI_MCP_SANDBOX"] ?? cfg["AiMcp:Sandbox"] ?? "read-only";
@@ -215,8 +222,9 @@ builder.Services.AddSingleton<IAgentRunnerRegistry>(sp =>
 if (string.IsNullOrEmpty(cfg["urls"]) && string.IsNullOrEmpty(cfg["ASPNETCORE_URLS"]))
     builder.WebHost.UseUrls("http://127.0.0.1:8787");
 
-// Reject oversized bodies before we even read them.
-builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 2 * 1024 * 1024); // 2 MB
+// JSON can escape each UTF-16 code unit as six bytes (\uXXXX). Allow that
+// representation plus bounded request metadata, while retaining a finite body cap.
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 6L * maxPromptLength + 64 * 1024);
 
 var app = builder.Build();
 
@@ -312,7 +320,8 @@ app.MapPost("/chat", async (
     var log = lf.CreateLogger("Chat");
 
     var v = ChatRequestValidator.Validate(req, allowedRoots, defaultSandbox, Directory.Exists, defaultProvider, allowedWriteRoots, defaultCwd,
-        codexInnerSandboxAvailable: codexInnerSandbox?.Available ?? true, readOnlyProjects: readOnlyProjects);
+        codexInnerSandboxAvailable: codexInnerSandbox?.Available ?? true, readOnlyProjects: readOnlyProjects,
+        maxPromptLength: maxPromptLength);
     if (!v.Ok)
         return Results.Json(v.Error, statusCode: v.StatusCode);
 
@@ -392,8 +401,8 @@ app.MapPost("/v1/responses", async (
         var prompt = ResponsesApi.BuildPrompt(root);
         if (string.IsNullOrWhiteSpace(prompt))
             return Results.Json(new ErrorResponse { Error = "Field 'input' is required and must contain text.", Code = "missing_input" }, statusCode: 400);
-        if (prompt.Length > ChatRequestValidator.MaxPromptLength)
-            return Results.Json(new ErrorResponse { Error = $"Flattened 'input' exceeds {ChatRequestValidator.MaxPromptLength} characters.", Code = "prompt_too_long" }, statusCode: 400);
+        if (prompt.Length > maxPromptLength)
+            return Results.Json(new ErrorResponse { Error = $"Flattened 'input' exceeds {maxPromptLength} characters.", Code = "prompt_too_long" }, statusCode: 400);
 
         // This endpoint always uses the instance's default provider + sandbox (no provider
         // switching mid-request — that's what separate bridge instances are for).

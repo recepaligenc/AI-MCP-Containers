@@ -19,6 +19,7 @@
 //   AI_MCP_TOOL_DESC  exposed MCP tool description   (sensible default per provider)
 //   AI_MCP_DEFAULT_CWD default cwd for the agent run (optional; must be inside bridge roots)
 //   AI_MCP_TIMEOUT_MS  per-call timeout in ms        (default 300000)
+//   AI_MCP_MAX_PROMPT_CHARS maximum UTF-16 prompt length (default 1000000; maximum 8000000)
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +28,6 @@ import { dirname, resolve } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER_NAME = 'ai-mcp-containers';
 const SERVER_VERSION = '1.1.1';
-const MAX_PROMPT = 100_000; // mirror ChatRequestValidator.MaxPromptLength in the bridge
 const SUPPORTED_PROTOCOL = '2025-06-18';
 
 // --- structured stderr logging (never touches stdout) -----------------------
@@ -63,6 +63,13 @@ for (const [key, value] of Object.entries(process.env)) {
 
 const ENV_FILE = clientEnv.AI_MCP_ENV_FILE || resolve(HERE, '..', '.env');
 const fileEnv = parseEnvFile(ENV_FILE);
+// Match the HTTP service and Compose; process env overrides the shared .env.
+const promptLimit = clientEnv.AI_MCP_MAX_PROMPT_CHARS ?? fileEnv.AI_MCP_MAX_PROMPT_CHARS ?? '1000000';
+const MAX_PROMPT = Number(promptLimit);
+if (!/^[0-9]+$/.test(promptLimit) || !Number.isSafeInteger(MAX_PROMPT) || MAX_PROMPT < 1 || MAX_PROMPT > 8_000_000) {
+  log('error', 'AI_MCP_MAX_PROMPT_CHARS must be an integer between 1 and 8000000.');
+  process.exit(1);
+}
 
 // ── EXACTLY TWO BRIDGES, BOTH GLOBAL (owner rule 2026-08-25 — permanent) ───────────────
 // This shim points at ONE fixed bridge per provider — codex on :8788, claude on :8789 — and it
@@ -114,7 +121,7 @@ const INPUT_SCHEMA = {
   properties: {
     prompt: {
       type: 'string',
-      description: 'The question or task for the agent. Plain text, 1..100000 chars.',
+      description: `The question or task for the agent. Plain text, 1..${MAX_PROMPT} UTF-16 code units.`,
     },
     cwd: {
       type: 'string',

@@ -205,6 +205,17 @@ public class ChatRequestValidatorTests
     }
 
     // ---- boundaries ----
+    [Theory]
+    [InlineData("ab\U0001F600", true)]
+    [InlineData("abc\U0001F600", false)]
+    public void Configured_prompt_limit_counts_utf16_units(string prompt, bool accepted)
+    {
+        var result = ChatRequestValidator.Validate(new ChatRequest { Prompt = prompt }, Roots,
+            "read-only", _ => true, maxPromptLength: 4);
+        Assert.Equal(accepted, result.Ok);
+        if (!accepted) Assert.Equal("prompt_too_long", result.Error!.Code);
+    }
+
     [Fact]
     public void Prompt_at_max_length_passes()
     {

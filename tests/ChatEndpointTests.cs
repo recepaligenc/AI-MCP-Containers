@@ -43,6 +43,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
     public string InnerSandbox { get; init; } = "available";
     public string Providers { get; init; } = "";
     public string? MaxOutputBytes { get; init; }
+    public string? MaxPromptChars { get; init; }
 
     public new HttpClient CreateClient()
     {
@@ -67,6 +68,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
         builder.UseSetting("AiMcp:DefaultCwd", "/tmp");
         builder.UseSetting("AiMcp:Token", Token ?? "");
         if (MaxOutputBytes is not null) builder.UseSetting("AI_MCP_MAX_OUTPUT_BYTES", MaxOutputBytes);
+        builder.UseSetting("AI_MCP_MAX_PROMPT_CHARS", MaxPromptChars ?? ChatRequestValidator.MaxPromptLength.ToString());
 
         builder.ConfigureServices(services =>
         {
@@ -83,6 +85,54 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
 public class ChatEndpointTests
 {
+    [Theory]
+    [InlineData("/chat")]
+    [InlineData("/v1/responses")]
+    public async Task Large_context_reaches_runner_unchanged(string route)
+    {
+        using var app = new TestApp();
+        using var client = app.CreateClient();
+        // Non-ASCII text is JSON-escaped by the serializer: the body exceeds 2 MiB.
+        var prompt = new string('\u0131', 400_000) + "\U0001F600";
+        object body = route == "/chat" ? new { prompt } : new { input = prompt };
+        using var response = await client.PostAsJsonAsync(route, body);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(prompt, app.Runner.LastPrompt);
+    }
+
+    [Theory]
+    [InlineData("/chat")]
+    [InlineData("/v1/responses")]
+    public async Task Configured_context_limit_applies_to_both_endpoints(string route)
+    {
+        using var app = new TestApp { MaxPromptChars = "1200000" };
+        using var client = app.CreateClient();
+        var prompt = new string('x', 1_200_000);
+        object accepted = route == "/chat" ? new { prompt } : new { input = prompt };
+        using var good = await client.PostAsJsonAsync(route, accepted);
+        Assert.Equal(HttpStatusCode.OK, good.StatusCode);
+        Assert.Equal(prompt, app.Runner.LastPrompt);
+        object rejected = route == "/chat" ? new { prompt = prompt + "x" } : new { input = prompt, instructions = "x" };
+        using var bad = await client.PostAsJsonAsync(route, rejected);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal("prompt_too_long", (await bad.Content.ReadFromJsonAsync<ErrorResponse>())!.Code);
+        Assert.Equal(1, app.Runner.Calls);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1.5")]
+    [InlineData("8000001")]
+    [InlineData("invalid")]
+    public void Invalid_context_limit_fails_startup(string value)
+    {
+        using var app = new TestApp { MaxPromptChars = value };
+        var error = Assert.ThrowsAny<Exception>(() => app.CreateClient());
+        Assert.Contains("AI_MCP_MAX_PROMPT_CHARS", error.ToString());
+    }
+
     [Fact]
     public async Task Codex_quota_retry_information_reaches_http_clients()
     {

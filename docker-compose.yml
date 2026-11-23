@@ -28,6 +28,7 @@ x-environment: &environment
   AI_MCP_READ_ONLY_PROJECTS: "true"
   AI_MCP_MAX_CONCURRENT_REQUESTS: ${AI_MCP_MAX_CONCURRENT_REQUESTS:-6}
   AI_MCP_MAX_OUTPUT_BYTES: ${AI_MCP_MAX_OUTPUT_BYTES:-8388608}
+  AI_MCP_MAX_PROMPT_CHARS: ${AI_MCP_MAX_PROMPT_CHARS:-1000000}
 
 services:
   codex-mcp:
@@ -51,6 +52,7 @@ services:
       # Calls are independent; clients supply any context in the current request.
       AI_MCP_CODEX_REUSE_SESSION: "false"
       AI_MCP_CODEX_EPHEMERAL: "true"
+      AI_MCP_TIMEOUT_SECONDS: "1200"
     volumes:
       - type: bind
         source: ${AI_MCP_CODEX_EXT_BIN:?set AI_MCP_CODEX_EXT_BIN in .env}

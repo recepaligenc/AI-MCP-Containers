@@ -38,6 +38,7 @@ Copy `.env.example` to the ignored private `.env` and fill in these settings:
 | `AI_MCP_CODEX_EXT_BIN` | Dedicated stable Codex binary directory, normally `${HOME}/.codex-ext-bin`. |
 | `AI_MCP_CLAUDE_EXTENSIONS` | Host VS Code extensions directory, normally `${HOME}/.vscode/extensions`. |
 | `AI_MCP_MAX_CONCURRENT_REQUESTS` | Maximum active requests per provider; default `6`. |
+| `AI_MCP_MAX_PROMPT_CHARS` | Prompt limit shared by services and MCP adapters; default `1000000`, range `1..8000000` UTF-16 code units. |
 | `AI_MCP_LAN_IP` | Empty, as in the example, keeps access to this host and the Docker network only. `auto` discovers the host's physical private IPv4 addresses at startup; one assigned private host IPv4 adds a listener on that address only. |
 
 Create the shared network once, prepare Codex's stable binary copy, then start:
@@ -414,6 +415,17 @@ process-tree termination while the provider is still running; output-reader clea
 has a separate one-second bound. This is a process deadline, not a total budget
 across retries. A child orphaned after its parent exits can outlive the call.
 
+Large context is accepted up to `AI_MCP_MAX_PROMPT_CHARS` without truncation.
+This applies to `/chat` and to the assembled instructions/input of `/v1/responses`.
+The HTTP body cap is six bytes per configured UTF-16 code unit plus 64 KiB for
+request metadata, allowing JSON-escaped Unicode beyond the former 2 MiB cap.
+Oversized prompts return `prompt_too_long`; oversized HTTP bodies return 413.
+Set the limit in the shared `.env`, rebuild/recreate the services after installing
+this code, and restart MCP clients so their adapters load the new code and setting.
+For remote adapters, configure the same value in their launcher environment or
+selected `AI_MCP_ENV_FILE`. Invalid values fail startup. Larger limits consume more
+memory; the provider model's token/context window still applies independently.
+
 Failed-provider warnings record the exit code, not raw stdout/stderr. Output remains
 in memory for quota, authentication and capacity classification. This does not
 sanitize every application/provider log or establish a confidentiality boundary.
@@ -458,7 +470,7 @@ empty previous response ID are accepted. Empty/whitespace instructions are ignor
 an empty model is accepted as informational. Wrong field types receive `bad_request`,
 non-object JSON roots receive `bad_json_type`, and missing/empty input receives
 `missing_input`. Errors use the bridge's `{ "error": "...", "code": "..." }` envelope.
-Combined instructions and input remain subject to the 100,000-character limit.
+Combined instructions and input remain subject to `AI_MCP_MAX_PROMPT_CHARS`.
 
 ## Migration and verification
 
