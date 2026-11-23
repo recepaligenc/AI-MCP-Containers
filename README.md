@@ -1,25 +1,61 @@
 # AI-MCP-Containers
 
-![Human-figure agents discuss the goal, critically revise a plan, compare UI options with user approval, propose changes, reuse checks, and shake hands over a joint delivery. Intended benefits: less unnecessary change, earlier risk discovery, consistent UI and less repeated testing.](docs/assets/pair-workflow.gif)
+**Pair programming for AI coding agents.** Claude Code and Codex work as a pair:
+one writes, the other reviews. With the collaboration rules installed, they critique
+the plan before implementation and the change and its test evidence before calling
+the work done. They can iterate across planning, coding and testing. You stay the lead.
 
-[View the static result and six-step overview](docs/assets/pair-workflow.png).
+![Claude Code as writer and Codex as reviewer exchange work across planning, coding and testing. The host client edits and runs tests; the reviewer advises at checkpoints.](docs/assets/cross-check-pair.gif)
 
-**Example collaborative workflow:** The personified agents discuss and refine a shared
-result. The host client coordinates an owner-controlled
-policy. Providers critique read-only project context; the client applies in-scope
-changes and runs justified checks. Claude and Codex roles can swap with the leading
-client. UI choices and visual checks apply to UI work. Instructions do not provide
-immutable enforcement or a built-in orchestration engine.
-The handshake means a joint recommendation after user acceptance and evidence, rather
-than an automatic release. Scenes pause for two extra seconds and the final delivery
-for eight, so the results remain visible. The linked static preview shows all six
-steps and the shared delivery as an alternative to the animation.
+[View the static illustration](docs/assets/cross-check-pair.png).
+Roles can swap with the leading client; the second agent reviews at checkpoints.
+The illustration shows collaboration, not automatic approval or release.
+
+## Why use it?
+
+For developers:
+
+- **A second opinion while you work.** Ask a different model to challenge a plan,
+  including when you are working alone. Agreement between models is not proof:
+  findings need supporting evidence.
+- **Review risks before building.** The reviewer looks for security issues,
+  performance problems and missing cases while changes are still a plan, then
+  reviews the implementation and test evidence.
+- **Avoid repeated work.** The rules require reuse of unchanged passing checks;
+  rerun affected tests when relevant inputs change or a concrete finding invalidates
+  the earlier evidence.
+
+For people responsible for delivery and budget:
+
+- **Find problems earlier.** The aim is fewer repeated fixes and less wasted time
+  and budget. Total savings and defect reduction have not been measured; reviews
+  also consume time and provider allowance.
+- **Keep control of changes.** The reviewer cannot directly edit the mounted project.
+  The host client applies justified changes; material scope changes and new UI designs
+  require your approval under the installed rules. Read-only does not prevent reading
+  files or sending their contents to the model provider.
+- **Make review usage visible.** The rules cap complementary reviews at 20 requests
+  per task, and the bridge returns usage receipts where available. These are not a
+  spending limit or a measure of subscription credits. See
+  [usage and cost reporting](docs/usage-and-cost.md).
+
+## Two parts: the connection and the rules
 
 Two global Docker services use the host owner's local Codex/ChatGPT and Claude Code
 subscriptions. Each service exposes `/chat` and `/v1/responses`; a local Node adapter
 makes the service available to MCP clients over stdio.
 No provider API key is required. The service's Bearer key is separate from provider
 authentication; all callers share this installation's accounts and subscription quotas.
+
+The **connection** supplies `ask_codex` and `ask_claude` tools inside your coding
+client. The **installable rule set** defines when to request review, how to assess
+findings and what evidence is needed before completion. Adopting it is optional;
+once adopted, it is mandatory for covered tasks. These are client instructions,
+not a built-in orchestration or enforcement layer.
+
+Start with the operating-system guide below, then
+[connect your clients](docs/getting-started.md#4-connect-each-native-client-once) and
+[install the rules](#install-and-reuse-the-model).
 
 ## Configure and start
 
