@@ -26,7 +26,14 @@ authentication; all callers share this installation's accounts and subscription 
 For **local Windows or macOS services**, use the
 [Docker Desktop setup](docs/docker-desktop.md). It installs Linux CLIs in the image
 and uses separate account volumes, without host extension binaries.
-The instructions below describe the existing Linux host integration.
+
+| Service host | Configure | Build / authenticate / start |
+| --- | --- | --- |
+| Windows / macOS | Copy `.env.desktop.example` to `.env.desktop` | Follow `node scripts/desktop.mjs check`, `build`, `login codex`, `login claude`, `up` in the [Desktop guide](docs/docker-desktop.md). |
+| Linux | Copy `.env.example` to `.env` | Use the Linux steps below. |
+
+The instructions below describe the existing Linux host integration. For the common
+MCP and rule-installation steps, see the [installation guide](docs/getting-started.md).
 
 Use a Linux host with Docker Compose, Node.js, rsync and compatible Linux provider
 binaries from VS Code. Sign into the native Codex and Claude Code CLIs on the host.
@@ -114,12 +121,14 @@ absolute-path placeholder below with a path on the **client's** machine:
 
 | Placeholder | What to select |
 | --- | --- |
-| `/absolute/path/to/node` | Node executable, from `command -v node`. An absolute path also works when an IDE has a different `PATH`. |
+| `/absolute/path/to/node` | Node executable, from `command -v node` on Linux/macOS or `(Get-Command node).Source` in PowerShell. An absolute path also works when an IDE has a different `PATH`. |
 | `/absolute/path/to/AI-MCP-Containers/mcp/bridge-mcp.mjs` | This checkout's adapter script, accessible to the MCP client. |
-| `/absolute/path/to/private/ai-mcp.env` | Private file containing `AI_MCP_TOKEN=<service-key>`. On the Docker host, the repository's ignored `.env` can be used directly. |
+| `/absolute/path/to/private/ai-mcp.env` | Private file containing `AI_MCP_TOKEN=<service-key>`. On the Docker host, use the ignored `.env` for Linux or `.env.desktop` for Desktop. |
 
-Create or edit the private token file outside version control and restrict it with
-`chmod 600 /absolute/path/to/private/ai-mcp.env`. Use the existing **service Bearer key**,
+Create or edit the private token file outside version control. On Linux/macOS restrict
+it with `chmod 600 /absolute/path/to/private/ai-mcp.env`; on Windows keep it in your
+private user profile and restrict access using Windows file permissions.
+Use the existing **service Bearer key**,
 not a provider API key or OAuth token. A remote client needs only this key; do not copy
 the host's Codex/Claude credential directories. The adapter reads the file itself;
 do not `source` it. An exported `AI_MCP_TOKEN` takes precedence over the file.
@@ -425,7 +434,7 @@ This applies to `/chat` and to the assembled instructions/input of `/v1/response
 The HTTP body cap is six bytes per configured UTF-16 code unit plus 64 KiB for
 request metadata, allowing JSON-escaped Unicode beyond the former 2 MiB cap.
 Oversized prompts return `prompt_too_long`; oversized HTTP bodies return 413.
-Set the limit in the shared `.env`, rebuild/recreate the services after installing
+Set the limit in `.env` for Linux or `.env.desktop` for Desktop, rebuild/recreate the services after installing
 this code, and restart MCP clients so their adapters load the new code and setting.
 For remote adapters, configure the same value in their launcher environment or
 selected `AI_MCP_ENV_FILE`. Invalid values fail startup. Larger limits consume more
@@ -436,6 +445,14 @@ in memory for quota, authentication and capacity classification. This does not
 sanitize every application/provider log or establish a confidentiality boundary.
 
 ## Subscriptions and automatic updates
+
+With Docker Desktop, Linux CLIs are installed in the image and credentials live
+in separate named volumes. Update with `node scripts/desktop.mjs build` followed
+by `node scripts/desktop.mjs up`; volumes retain their logins. See the
+[Desktop guide](docs/docker-desktop.md) for login renewal and version details.
+
+The following host credential and extension-updater behavior applies to the
+**Linux host deployment**:
 
 Codex shares the host `~/.codex` directory so atomic OAuth refreshes remain coordinated.
 The service never prunes host-owned session files. Claude reads the host `~/.claude`

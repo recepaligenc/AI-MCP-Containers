@@ -2,10 +2,22 @@
 
 This guide sets up the two local provider services, connects your native Codex and
 Claude clients, and installs the collaboration rules without moving Markdown files
-by hand. The services use your own authenticated CLI installations. They do not
+by hand. The services use your own provider accounts. They do not
 combine your subscriptions or transfer credits between providers.
 
-## 1. Prepare your computer
+Choose the service installation for your operating system first:
+
+| Service host | Setup path | Private environment | Service commands |
+| --- | --- | --- | --- |
+| Windows / macOS with Docker Desktop | [Docker Desktop guide](docker-desktop.md) | `.env.desktop` | `node scripts/desktop.mjs check`, `build`, `login codex`, `login claude`, `up` |
+| Linux with host extension binaries | Steps 1–3 below | `.env` | `./refresh-codex-bin.sh`, `./run-docker.sh --build` |
+
+**Windows/macOS:** complete the Desktop guide's configuration, build, account login
+and startup, then resume at **step 4** here. Do not run the Linux shell scripts,
+configure host UID/GID values or mount native Windows/macOS extension binaries.
+Desktop providers use Linux CLIs inside the image and account state in Docker volumes.
+
+## 1. Prepare your computer (Linux)
 
 Use a Linux host with Docker Engine, Docker Compose, Node.js and `rsync`. Sign in to
 both native CLIs on the host and confirm that your installed Linux Codex and Claude
@@ -20,7 +32,7 @@ cd AI-MCP-Containers
 cp .env.example .env
 ```
 
-## 2. Select access and configure your private environment
+## 2. Select access and configure your private environment (Linux)
 
 Edit `.env` using the English explanations in `.env.example`. Set:
 
@@ -42,7 +54,7 @@ Docker network only. Keep it empty unless you need the documented host-IP mode.
 Host-IP access still requires the bearer token; review the README network limitations
 before enabling it.
 
-## 3. Start the services
+## 3. Start the services (Linux)
 
 Create the shared network once if it does not already exist:
 
@@ -65,6 +77,11 @@ from the other client if you use both. It registers the complementary provider M
 connection in that client's user configuration. Registration is separate from
 installing collaboration rules, and does not need repeating for every project.
 
+For Desktop, use the absolute **client-side** `.env.desktop` path as
+`AI_MCP_ENV_FILE`. The service's project path is `/workspace`: omit request `cwd`
+or use `/workspace/subproject`. The native host's Windows/macOS project path is
+used by Docker and the rule installer, not by provider requests.
+
 Keep the reserved `ai_mcp_codex` and `ai_mcp_claude` registrations on the documented
 stdio adapter. The guide includes the exact Codex and Claude connection commands,
 verification prompt and their purpose. Never paste the bearer token into a prompt.
@@ -76,6 +93,12 @@ path for a project installation:
 
 ```bash
 node scripts/install-rules.mjs --project /absolute/path/to/your/project
+```
+
+In Windows PowerShell, quote the native project path, for example:
+
+```powershell
+node scripts/install-rules.mjs --project 'C:/Users/Alice/Projects/My App'
 ```
 
 Or apply the policy to your native clients across projects:
@@ -148,11 +171,14 @@ may skip imports outside its workspace.
 If you chose user scope and the new project is inside the allowed project root,
 open it in the same native client and use the
 [collaboration task prompt](console-setup.md). No new rule-file copying or MCP
-registration is needed. Pass that project's absolute `cwd` to peer reviews.
+registration is needed. With Linux host mounts, pass that project's absolute `cwd`
+to peer reviews. With Desktop, use the corresponding `/workspace/subproject` path.
 
 For project scope, run the installer once for the new project. If the project is
 outside the selected Docker root, deliberately change `AI_MCP_PROJECT_ROOT` in
-`.env` and rerun `./run-docker.sh`. A new instruction file cannot grant access to a
+`.env` and rerun `./run-docker.sh` on Linux, or in `.env.desktop` and rerun
+`node scripts/desktop.mjs up` on Desktop. The Desktop mount remains `/workspace`
+after changing its host source. A new instruction file cannot grant access to a
 directory the containers do not mount. Review the exposure before broadening the
 root to include several repositories.
 
@@ -161,11 +187,19 @@ root to include several repositories.
 Pull repository updates. Rerun the rule installer and choose Keep, Update or Override for
 the installed policy. Update repairs missing installation structure; replacing or
 merging newer policy text requires an explicit owner decision. Existing projects
-are not silently rewritten. Refresh Codex
+are not silently rewritten.
+
+For the Linux host deployment, refresh Codex
 with `./refresh-codex-bin.sh --recreate` after a relevant extension update; Claude's
 launcher selects its newest compatible installed extension at invocation time.
 Rebuild changed services with `./run-docker.sh --build`. The optional documented
 user services can automate binary refresh; they are separate from rule installation.
+
+For Desktop, update the repository and run `node scripts/desktop.mjs build`, then
+`node scripts/desktop.mjs up`. The named account volumes survive image recreation;
+repeat login only if an account needs re-authentication. The Desktop guide describes
+the required `down` → `login` → `up` sequence for that case. Restart native clients
+after adapter changes. Desktop does not use the extension updater or systemd units.
 
 See [usage and cost reporting](usage-and-cost.md) for what the initiating client can
 measure after reviews, and which credit figures remain unavailable.

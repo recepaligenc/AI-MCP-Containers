@@ -1,5 +1,9 @@
 # Codex extension refresh and shared-home recovery
 
+These units apply only to the Linux host extension-based deployment.
+Windows/macOS Docker Desktop users follow the [Desktop guide](../docs/docker-desktop.md)
+and rebuild its image instead of installing these units.
+
 Run `node scripts/install-user-services.mjs` to inspect the planned unit names.
 Run it with `--install` to install and enable the user services for the current
 checkout. The installer renders actual paths instead of shipping an owner's home

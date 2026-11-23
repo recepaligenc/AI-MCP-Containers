@@ -28,6 +28,12 @@ Configure the MCP launcher with these names:
 | `AI_MCP_TIMEOUT_MS` | Positive request timeout; default 300000 milliseconds |
 | `AI_MCP_MAX_PROMPT_CHARS` | Prompt limit in UTF-16 code units; default `1000000`, integer range `1..8000000`. Process environment overrides the selected `.env`. |
 
+For local Windows/macOS services, follow the [Desktop installation guide](../docs/docker-desktop.md).
+Set `AI_MCP_ENV_FILE` explicitly to that installation's absolute `.env.desktop` path;
+the adapter's default remains `.env` for existing Linux installations. The service
+uses `/workspace` as its project root. Omit request `cwd` or send `/workspace/subproject`,
+even when the adapter runs natively on Windows or macOS.
+
 The server-side Compose configuration has one project path: `AI_MCP_PROJECT_ROOT`.
 It is mounted read-only in both containers. The service defaults to this directory;
 `cwd` can select an existing descendant. A parent mount exposes all readable files
@@ -60,7 +66,8 @@ configuration when invoked as a provider.
 
 The canonical Docker network is `ai-mcp-shared`. A client on that network can set
 `AI_MCP_URL` to `http://codex-mcp:8080` or `http://claude-mcp:8080`. Host clients can
-keep the localhost defaults. With `AI_MCP_LAN_IP=auto`, service startup discovers the
+keep the localhost defaults. The following LAN discovery applies to the Linux host
+deployment; the Desktop profile remains localhost-only. With `AI_MCP_LAN_IP=auto`, service startup discovers the
 local Linux Docker host's physical private IPv4 addresses. Remote clients can use any
 selected host address with port `8788` or `8789` and their explicit `AI_MCP_TOKEN`.
 Set one private IPv4 to restrict LAN access or leave the setting empty, as the example

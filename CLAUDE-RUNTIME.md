@@ -1,5 +1,10 @@
 # Claude runtime
 
+This document describes the **Linux host extension-based deployment**.
+For Windows/macOS Docker Desktop, use the [Desktop guide](docs/docker-desktop.md):
+its image installs the Linux CLI and its account home is a named Docker volume.
+The host extension mounting and credential-seed steps below do not apply there.
+
 The service uses the latest compatible stable Linux Claude Code executable installed
 by the host's VS Code extension. It does not install an independent npm Claude CLI.
 The host extensions directory, selected by `AI_MCP_CLAUDE_EXTENSIONS`, is mounted

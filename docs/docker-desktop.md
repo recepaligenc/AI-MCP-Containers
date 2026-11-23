@@ -18,7 +18,15 @@ and its ignored overrides remain separate from these commands.
 
 ## Configure
 
-Run commands from this repository. Copy the public template:
+Install Git, clone the repository and enter it. These commands work in PowerShell
+and macOS Terminal:
+
+```sh
+git clone https://github.com/recepaligenc/AI-MCP-Containers.git
+cd AI-MCP-Containers
+```
+
+Copy the public template:
 
 ```powershell
 # Windows PowerShell
@@ -99,15 +107,96 @@ The endpoints remain `http://127.0.0.1:8788` (Codex) and
 `http://127.0.0.1:8789` (Claude). Use the existing
 [client registration examples](../README.md#connect-claude-and-codex-as-mcp-clients),
 but point `AI_MCP_ENV_FILE` to the absolute local path of **`.env.desktop`**.
-Use your native Node executable and the local `mcp/bridge-mcp.mjs` path.
-Use literal TOML strings for Windows paths, for example:
+Use your native Node executable and the local `mcp/bridge-mcp.mjs` path. Find Node
+with `(Get-Command node).Source` in PowerShell or `command -v node` on macOS.
+Native Codex/Claude clients are required only when connecting those clients; service
+authentication uses the CLIs inside Docker.
+
+### Codex CLI / VS Code
+
+Add both blocks to the native client's `~/.codex/config.toml`
+(`$env:USERPROFILE\.codex\config.toml` on Windows), preserving existing settings.
+This complete Windows example uses literal TOML strings so backslashes are preserved;
+replace the Node and checkout paths with your own:
 
 ```toml
+[mcp_servers.ai_mcp_codex]
 command = 'C:\Program Files\nodejs\node.exe'
 args = ['C:\Projects\AI-MCP-Containers\mcp\bridge-mcp.mjs']
-# Inside the matching mcp_servers.<name>.env table:
-# AI_MCP_ENV_FILE = 'C:\Projects\AI-MCP-Containers\.env.desktop'
+startup_timeout_sec = 20
+tool_timeout_sec = 1300
+
+[mcp_servers.ai_mcp_codex.env]
+AI_MCP_PROVIDER = 'codex'
+AI_MCP_URL = 'http://127.0.0.1:8788'
+AI_MCP_ENV_FILE = 'C:\Projects\AI-MCP-Containers\.env.desktop'
+AI_MCP_TIMEOUT_MS = '1250000'
+AI_MCP_DEFAULT_CWD = '/workspace'
+
+[mcp_servers.ai_mcp_claude]
+command = 'C:\Program Files\nodejs\node.exe'
+args = ['C:\Projects\AI-MCP-Containers\mcp\bridge-mcp.mjs']
+startup_timeout_sec = 20
+tool_timeout_sec = 1300
+
+[mcp_servers.ai_mcp_claude.env]
+AI_MCP_PROVIDER = 'claude'
+AI_MCP_URL = 'http://127.0.0.1:8789'
+AI_MCP_ENV_FILE = 'C:\Projects\AI-MCP-Containers\.env.desktop'
+AI_MCP_TIMEOUT_MS = '1250000'
+AI_MCP_DEFAULT_CWD = '/workspace'
 ```
+
+On **macOS**, use these same two blocks with `command` set to the absolute result
+of `command -v node`. Replace both `args` entries with your adapter's Unix path,
+such as `['/Users/alice/Projects/AI-MCP-Containers/mcp/bridge-mcp.mjs']`, and both
+`AI_MCP_ENV_FILE` entries with `/Users/alice/Projects/AI-MCP-Containers/.env.desktop`.
+Provider names, URLs, timeouts and `/workspace` remain identical.
+
+### Claude Code CLI / VS Code
+
+Use a native Claude Code CLI supporting `mcp add-json` input from stdin (the
+[shared instructions](../README.md#claude-code-cli-and-vs-code) specify the minimum
+version). Save this as a local `codex-service.json`, replacing the paths:
+
+```json
+{
+  "type": "stdio",
+  "command": "C:/Program Files/nodejs/node.exe",
+  "args": ["C:/Projects/AI-MCP-Containers/mcp/bridge-mcp.mjs"],
+  "timeout": 1300000,
+  "env": {
+    "AI_MCP_PROVIDER": "codex",
+    "AI_MCP_URL": "http://127.0.0.1:8788",
+    "AI_MCP_ENV_FILE": "C:/Projects/AI-MCP-Containers/.env.desktop",
+    "AI_MCP_TIMEOUT_MS": "1250000",
+    "AI_MCP_DEFAULT_CWD": "/workspace"
+  }
+}
+```
+
+Create `claude-service.json` from the same structure with `AI_MCP_PROVIDER` set to
+`claude` and `AI_MCP_URL` set to `http://127.0.0.1:8789`. For macOS, replace all
+client paths with their absolute Unix paths. The files contain paths, not secret keys.
+
+Run registration **outside** an active Claude Code session:
+
+```powershell
+# Windows PowerShell: pipe JSON to stdin; do not use Unix '< file' redirection.
+Get-Content -Raw -LiteralPath ./codex-service.json | claude mcp add-json ai_mcp_codex - --scope user
+Get-Content -Raw -LiteralPath ./claude-service.json | claude mcp add-json ai_mcp_claude - --scope user
+```
+
+```sh
+# macOS Terminal
+claude mcp add-json ai_mcp_codex - --scope user < ./codex-service.json
+claude mcp add-json ai_mcp_claude - --scope user < ./claude-service.json
+```
+
+For either native client, start a new session and inspect `/mcp`. Tool discovery
+confirms registration; it does not prove an authenticated model call. Continue with
+[steps 4–5 of the installation guide](getting-started.md#4-connect-each-native-client-once)
+for the shared connection verification and rule installer.
 
 The service sees the selected project at **`/workspace`**. Omit request `cwd` to
 use that directory, or send `/workspace/subproject`. Host paths such as
@@ -122,7 +211,27 @@ localhost only; Linux automatic LAN discovery is not used.
 
 ## Verification coverage
 
-The code includes Windows-drive and macOS-path fixtures, Compose hardening checks
-and Linux-container CLI smoke checks. Actual Windows/macOS Docker Desktop runtime
-and browser account login must be verified on those hosts. Linux-only evidence
-does not establish that a host's file-sharing permissions or account login works.
+Windows-drive and macOS-path unit fixtures and resolved Compose hardening checks
+cover configuration. The Linux amd64 image has also been checked for CLI startup,
+non-root home ownership/persistence, read-only mounts and authenticated local
+readiness for both provider configurations, without making model calls.
+The CI matrix is configured to run setup unit checks on Linux, Windows and macOS; that is not
+an end-to-end Docker Desktop or browser-login test.
+
+Actual Windows/macOS Docker Desktop execution, ARM64 execution and browser account
+login remain unverified here. Linux-only evidence does not establish that a host's
+file-sharing permissions or account login works.
+
+After installation on each target machine:
+
+1. Run `node scripts/desktop.mjs status codex` and `status claude` and confirm both
+   accounts are signed in.
+2. Open `http://127.0.0.1:8788/health` and `http://127.0.0.1:8789/health` in the host
+   browser; each should return `{"status":"ok"}`.
+3. Start a new native client session and confirm both MCP tools are connected.
+4. Choose a non-secret file in the selected project. Ask each provider, with
+   `cwd=/workspace`, to report a short fact from that file without editing anything.
+   This uses provider quota and checks account access, client wiring and the project
+   mount together. A quota, login or file-sharing failure leaves that check pending.
+
+Only a successful run on the target machine establishes its complete installation.

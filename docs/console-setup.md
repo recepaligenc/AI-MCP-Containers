@@ -10,6 +10,12 @@ client, matching the [connection examples](../README.md#connect-claude-and-codex
 and makes the **collaboration rule project-scoped**. Run it once in each client that
 you use; both clients reuse the same two services and the same project rule.
 
+Start the services before using this prompt. For Windows/macOS follow the
+[Docker Desktop guide](docker-desktop.md); for Linux follow the
+[installation guide](getting-started.md). MCP registration does not build containers
+or sign into provider accounts. Desktop uses `.env.desktop` and server paths under
+`/workspace`; rule installation still uses the native host project path.
+
 ## Paste this into either console
 
 Please use this prompt when you would like to connect the current coding client to
@@ -31,6 +37,9 @@ AI-MCP-Containers providers and persist their collaboration workflow for this pr
    paths/settings that cannot be discovered safely. Treat credential files as opaque:
    do not print their contents, put keys in command arguments, or copy secrets into
    prompts, client configuration literals, project rules or version control.
+   Identify whether the services use the Linux or Docker Desktop deployment.
+   For Desktop, use its .env.desktop key file and /workspace server working directory;
+   keep native host paths for local Node, the adapter and the rule installer.
 2. Configure both reserved stdio registrations, ai_mcp_codex and ai_mcp_claude, for
    the current client at user scope using the documented configuration. The tools
    must be ask_codex and ask_claude. Use AI_MCP_ENV_FILE for the existing private key
